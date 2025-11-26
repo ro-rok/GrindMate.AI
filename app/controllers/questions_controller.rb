@@ -1,4 +1,6 @@
 # app/controllers/questions_controller.rb
+require "set"
+
 class QuestionsController < ApplicationController
   skip_before_action :authenticate_user!, raise: false
   before_action :set_optional_user
@@ -6,7 +8,8 @@ class QuestionsController < ApplicationController
   # GET /companies/:company_id/questions
   def index
     company = Company.find(params[:company_id])
-    scope = company.questions.where(timeframe: params[:timeframe])
+    scope = company.questions
+    scope = scope.where(timeframe: params[:timeframe]) if params[:timeframe].present?
   
     # ✅ Add filters if present
     if params[:difficulty].present?
@@ -14,12 +17,13 @@ class QuestionsController < ApplicationController
     end
 
     if params[:topics].present?
-      topics = params[:topics].split(',').map(&:strip)
-      topics_query = topics.map { |t| "topics LIKE ?" }.join(' OR ')
-      scope = scope.where(topics_query, *topics.map { |t| "%#{t}%" })
+      topic_filters = build_topic_filters(params[:topics])
+      scope = scope.any_of(*topic_filters) if topic_filters.any?
     end
 
-    render json: scope.select(:id, :title, :link, :difficulty, :frequency, :acceptance_rate, :updated_at, :topics).order(:frequency, :updated_at).map { |q|
+    solved_ids = current_user_solved_ids
+
+    render json: scope.order_by(frequency: :asc, updated_at: :asc).map { |q|
       {
         id: q.id,
         title: q.title,
@@ -29,7 +33,7 @@ class QuestionsController < ApplicationController
         acceptance_rate: q.acceptance_rate,
         topics: q.topics,
         updated_at: q.updated_at,
-        solved: @current_user&.solved_questions&.exists?(q.id) || false
+        solved: solved_ids.include?(q.id)
       }
     }
   end
@@ -62,15 +66,14 @@ class QuestionsController < ApplicationController
     end
 
     if params[:topics].present?
-      scope = scope.where("topics LIKE ?", "%#{params[:topics]}%")
+      topic_filters = build_topic_filters(params[:topics])
+      scope = scope.any_of(*topic_filters) if topic_filters.any?
     end
 
-    if @current_user
-      solved_ids = @current_user.user_questions.where(solved: true).pluck(:question_id)
-      scope = scope.where.not(id: solved_ids)
-    end
+    solved_ids = current_user_solved_ids
+    scope = scope.not_in(id: solved_ids.to_a) if solved_ids.any?
 
-    question = scope.order(Arel.sql("RANDOM()")).first
+    question = sample_question(scope)
     return head :no_content unless question
 
     render json: question.slice(:id, :title, :link, :difficulty, :frequency, :topics)
@@ -107,5 +110,24 @@ class QuestionsController < ApplicationController
       Rails.logger.info "[WARN] No user_id provided in request"
       @current_user = nil
     end
+  end
+
+  def current_user_solved_ids
+    return Set.new unless @current_user
+
+    Set.new(@current_user.user_questions.where(solved: true).pluck(:question_id))
+  end
+
+  def build_topic_filters(topics_param)
+    topics_param.split(",").map(&:strip).reject(&:blank?).map do |topic|
+      { topics: /#{Regexp.escape(topic)}/i }
+    end
+  end
+
+  def sample_question(scope)
+    count = scope.count
+    return nil if count.zero?
+
+    scope.skip(rand(count)).first
   end
 end

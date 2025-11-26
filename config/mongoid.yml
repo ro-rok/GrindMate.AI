@@ -1,0 +1,30 @@
+development:
+  clients:
+    default:
+      uri: <%= ENV.fetch("MONGODB_URI", "mongodb://127.0.0.1:27017/leetcode_tracker_development") %>
+      options:
+        server_selection_timeout: 5
+  options:
+    use_activesupport_time_zone: true
+    belong_to_required_by_default: false
+
+test:
+  clients:
+    default:
+      uri: <%= ENV.fetch("MONGODB_URI_TEST", "mongodb://127.0.0.1:27017/leetcode_tracker_test") %>
+      options:
+        server_selection_timeout: 5
+  options:
+    use_activesupport_time_zone: true
+    belong_to_required_by_default: false
+
+production:
+  clients:
+    default:
+      uri: <%= ENV.fetch("MONGODB_URI") %>
+      options:
+        server_selection_timeout: 5
+  options:
+    use_activesupport_time_zone: true
+    belong_to_required_by_default: false
+

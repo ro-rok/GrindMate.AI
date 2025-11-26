@@ -1,26 +1,2 @@
-default: &default
-  adapter: postgresql
-  encoding: unicode
-  pool: 5
-  timeout: 5000
-
-development:
-  <<: *default
-  database: leetcode_tracker_dev
-  username: postgres
-  password: 1234
-  host: localhost
-
-test:
-  <<: *default
-  database: leetcode_tracker_test
-  username: postgres
-  password: 1234
-  host: localhost
-
-production:
-  <<: *default
-  adapter: postgresql
-  encoding: unicode
-  url: <%= ENV['DATABASE_URL'] %>
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+# ActiveRecord is no longer used in this project.
+# MongoDB connection settings now live in config/mongoid.yml.

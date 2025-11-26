@@ -66,4 +66,10 @@ class GithubCsvImporter
 
     puts "[Importer] ✅ Done importing for #{company.name}"
   end
+
+  def self.refresh_all!
+    Company.all.each do |company|
+      refresh_company!(company)
+    end
+  end
 end

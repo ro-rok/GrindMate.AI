@@ -4,7 +4,12 @@ ruby '3.3.7'
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.0.2"
 # Use mysql as the database for Active Record
-gem 'pg', '>= 1.5', group: [:production, :development, :test]
+gem "mongoid", "~> 9.0"
+gem "devise-mongoid", "~> 7.0"
+
+group :data_migration do
+  gem "pg", require: false
+end
 
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
@@ -18,9 +23,6 @@ gem "bcrypt", "~> 3.1.7"
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
 # Use the database-backed adapters for Rails.cache, Active Job, and Action Cable
-gem "solid_cache"
-gem "solid_queue"
-gem "solid_cable"
 
 gem 'devise'
 

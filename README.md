@@ -48,9 +48,8 @@ frontend:
 git clone https://github.com/your-org/grindmate-backend.git
 cd grindmate-backend
 bundle install
-yarn install
-rails db:setup
-# set your GROQ_API_KEY in .env
+bundle exec rails mongoid:create_indexes
+# set GROQ_API_KEY + MONGODB_URI in .env
 rails s -p 3000
 ```
 
@@ -78,8 +77,32 @@ Huge thanks to @liquidslr for the original company-wise LeetCode dataset and ins
 
 ## 🧪 Testing
 
-- Backend: bundle exec rspec  
-- Frontend: npm test  
+- Backend: `bin/rails test`
+- Frontend: `npm test`
+
+## 🗄️ Migrating SQL data to MongoDB
+
+The API now persists everything in MongoDB via Mongoid. To copy your
+existing PostgreSQL (or SQLite) data into Mongo, install the optional
+`data_migration` bundle group and run:
+
+```bash
+# install optional dependencies if needed
+BUNDLE_WITH=data_migration bundle install
+
+# dry-run the transfer first
+SQL_MIGRATION_URL=postgres://user:pass@localhost:5432/leetcode_tracker \
+DRY_RUN=true \
+bin/rails data:migrate_sql_to_mongo
+
+# actual import
+SQL_MIGRATION_URL=postgres://user:pass@localhost:5432/leetcode_tracker \
+bin/rails data:migrate_sql_to_mongo
+```
+
+`SQL_MIGRATION_URL` (or `DATABASE_URL`) must point at your legacy SQL
+database. Set `DRY_RUN=true` to verify what would be imported without
+writing to Mongo.
 
 ## 🔧 Deployment
 

@@ -1,6 +1,16 @@
 require_relative "boot"
 
-require "rails/all"
+require "rails"
+
+require "active_model/railtie"
+require "active_job/railtie"
+require "action_controller/railtie"
+require "action_mailer/railtie"
+require "action_view/railtie"
+require "action_cable/engine"
+require "rails/test_unit/railtie"
+
+require "mongoid/railtie"
 
 if ['development', 'test'].include?(ENV['RAILS_ENV'] || ENV['RACK_ENV'])
   require 'dotenv-rails'
@@ -25,6 +35,14 @@ module LeetcodeTracker
 
     config.middleware.use Warden::Manager do |manager|
       Devise.warden_config = manager
+    end
+
+    config.before_configuration do
+      Mongoid.load!(config.root.join("config/mongoid.yml"), Rails.env)
+    end
+
+    config.generators do |g|
+      g.orm :mongoid
     end
     # Configuration for the application, engines, and railties goes here.
     #

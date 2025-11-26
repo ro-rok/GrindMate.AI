@@ -2,7 +2,7 @@ class CompaniesController < ApplicationController
     # GET /companies
     skip_before_action :verify_authenticity_token, only: [:refresh], if: ->{ request.format.json? }
     def index
-      companies = Company.order(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } }
+      companies = Company.order_by(name: :asc).pluck(:id, :name).map { |id, name| { id: id, name: name } }
       render json: companies
     end
   
@@ -27,7 +27,7 @@ class CompaniesController < ApplicationController
 
     def topics
       company = Company.find(params[:id])
-      topic_list = company.questions.distinct.pluck(:topics).compact
+      topic_list = company.questions.distinct(:topics).compact
       unique_topics = topic_list.flat_map { |t| t.split(',') }.map(&:strip).uniq.sort
       render json: unique_topics
     end

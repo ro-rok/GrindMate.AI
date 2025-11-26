@@ -10,10 +10,8 @@ class UsersController < ApplicationController
     end
 
     if params[:company_id].present?
-      @current_user.user_questions
-                  .joins(:question)
-                  .where(questions: { company_id: params[:company_id] })
-                  .destroy_all
+      question_ids = Question.where(company_id: params[:company_id]).pluck(:id)
+      @current_user.user_questions.where(:question_id.in => question_ids).destroy_all
     else
       @current_user.user_questions.destroy_all
     end
