@@ -1,19 +1,27 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, EmailStr, field_serializer
+from pydantic_core import core_schema
 
 
 class PyObjectId(ObjectId):
     @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+    def __get_pydantic_core_schema__(
+        cls, source_type: Any, handler: Any
+    ) -> core_schema.CoreSchema:
+        return core_schema.no_info_plain_validator_function(cls.validate)
 
     @classmethod
-    def validate(cls, v):
+    def validate(cls, v: Any) -> ObjectId:
         if isinstance(v, ObjectId):
             return v
-        return ObjectId(str(v))
+        if isinstance(v, str):
+            try:
+                return ObjectId(v)
+            except Exception:
+                raise ValueError(f"Invalid ObjectId: {v}")
+        raise ValueError(f"Cannot convert {type(v)} to ObjectId")
 
 
 class MongoModel(BaseModel):

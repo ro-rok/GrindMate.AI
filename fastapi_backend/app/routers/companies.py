@@ -17,7 +17,7 @@ async def list_companies(db: AsyncIOMotorDatabase = Depends(get_database)):
     cursor = db["companies"].find({}, sort=[("name", 1)])
     results: list[CompanyPublic] = []
     async for doc in cursor:
-        doc["id"] = doc["_id"]
+        doc["id"] = str(doc["_id"])
         results.append(CompanyPublic(**doc))
     return results
 
@@ -39,7 +39,7 @@ async def get_company(
     if questions_count == 0:
         background_tasks.add_task(refresh_company_questions, str(company["_id"]))
 
-    company["id"] = company["_id"]
+    company["id"] = str(company["_id"])
     return CompanyPublic(**company)
 
 

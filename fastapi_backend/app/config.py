@@ -1,11 +1,17 @@
 import os
 from functools import lru_cache
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, field_validator, ConfigDict
 from pydantic_settings import BaseSettings
 from typing import List
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"  # Ignore extra fields from .env file
+    )
+    
     # MongoDB
     mongodb_uri: str = os.getenv(
         "MONGODB_URI",
@@ -20,25 +26,21 @@ class Settings(BaseSettings):
 
     # CORS
     backend_base_url: str = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
-    frontend_origins: List[str] = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://grindmate-ai.vercel.app"
-    ]
+    frontend_origins: str = os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:5173,http://localhost:3000,https://grindmate-ai.vercel.app"
+    )
 
-    @field_validator("frontend_origins", mode="before")
-    @classmethod
-    def assemble_cors_origins(cls, v):
-        if isinstance(v, str):
-            # Comma-separated list in env
-            items = [i.strip() for i in v.split(",") if i.strip()]
+    @property
+    def frontend_origins_list(self) -> List[str]:
+        """Parse comma-separated frontend origins string into a list"""
+        if isinstance(self.frontend_origins, str):
+            items = [i.strip() for i in self.frontend_origins.split(",") if i.strip()]
             return items if items else [
                 "http://localhost:5173",
                 "http://localhost:3000",
                 "https://grindmate-ai.vercel.app"
             ]
-        if isinstance(v, list):
-            return v
         return [
             "http://localhost:5173",
             "http://localhost:3000",
@@ -48,11 +50,6 @@ class Settings(BaseSettings):
     # External APIs
     groq_api_key: str | None = os.getenv("GROQ_API_KEY")
     groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
-
-    model_config = {
-        "env_file": ".env",
-        "env_file_encoding": "utf-8"
-    }
 
 
 @lru_cache

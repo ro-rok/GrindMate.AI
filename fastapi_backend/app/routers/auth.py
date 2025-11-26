@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ..auth import (
@@ -19,11 +19,29 @@ router = APIRouter(tags=["auth"])
 
 
 @router.post("/users", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
+@router.post("/users.json", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 async def register_user(
-    payload: UserInCreate,
+    request: Request,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    existing = await db["users"].find_one({"email": payload.email})
+    # Get JSON body
+    body = await request.json()
+    
+    # Handle both formats: {user: {email, password}} and {email, password}
+    if "user" in body:
+        email = body["user"].get("email")
+        password = body["user"].get("password")
+    else:
+        email = body.get("email")
+        password = body.get("password")
+    
+    if not email or not password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Email and password are required",
+        )
+    
+    existing = await db["users"].find_one({"email": email})
     if existing:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -31,8 +49,8 @@ async def register_user(
         )
 
     doc = {
-        "email": payload.email,
-        "encrypted_password": hash_password(payload.password),
+        "email": email,
+        "encrypted_password": hash_password(password),
     }
     result = await db["users"].insert_one(doc)
     doc["_id"] = result.inserted_id
@@ -40,13 +58,31 @@ async def register_user(
 
 
 @router.post("/users/sign_in", response_model=UserPublic)
+@router.post("/users/sign_in.json", response_model=UserPublic)
 async def login_user(
-    payload: UserInLogin,
+    request: Request,
     response: Response,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    user = await get_user_by_email(db, payload.email)
-    if not user or not verify_password(payload.password, user.encrypted_password):
+    # Get JSON body
+    body = await request.json()
+    
+    # Handle both formats: {user: {email, password}} and {email, password}
+    if "user" in body:
+        email = body["user"].get("email")
+        password = body["user"].get("password")
+    else:
+        email = body.get("email")
+        password = body.get("password")
+    
+    if not email or not password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Email and password are required",
+        )
+    
+    user = await get_user_by_email(db, email)
+    if not user or not verify_password(password, user.encrypted_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -66,6 +102,7 @@ async def login_user(
 
 
 @router.delete("/users/sign_out", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/users/sign_out.json", status_code=status.HTTP_204_NO_CONTENT)
 async def logout_user(response: Response):
     settings = get_settings()
     response.delete_cookie(key=settings.access_token_cookie_name)
@@ -74,6 +111,12 @@ async def logout_user(response: Response):
 
 @router.get("/users/current", response_model=UserPublic)
 async def current_user(user: CurrentUser):
+    return UserPublic(id=user.id, email=user.email, legacy_id=user.legacy_id)
+
+
+@router.get("/users/current.json", response_model=UserPublic)
+async def current_user_json(user: CurrentUser):
+    """Alias for /users/current with .json extension for frontend compatibility"""
     return UserPublic(id=user.id, email=user.email, legacy_id=user.legacy_id)
 
 

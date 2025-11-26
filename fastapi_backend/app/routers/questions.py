@@ -69,10 +69,21 @@ async def list_questions(
     )
     results: list[QuestionWithSolved] = []
     async for doc in cursor:
-        doc["id"] = doc["_id"]
-        q = QuestionWithSolved(**doc, solved=doc["_id"] in solved_ids)
+        # Check if solved before converting ObjectIds
+        is_solved = doc["_id"] in solved_ids
+        # Convert all ObjectId fields to strings for serialization
+        doc["id"] = str(doc["_id"])
+        # Remove _id field as it's not in the model
+        doc.pop("_id", None)
+        # Convert any remaining ObjectId fields
+        for key, value in list(doc.items()):
+            if isinstance(value, ObjectId):
+                doc[key] = str(value)
+        q = QuestionWithSolved(**doc, solved=is_solved)
         results.append(q)
     return results
+
+
 
 
 @router.get("/random", response_model=QuestionPublic, status_code=status.HTTP_200_OK)
@@ -136,7 +147,77 @@ async def random_question(
         raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
 
     doc = docs[0]
-    doc["id"] = doc["_id"]
+    doc["id"] = str(doc["_id"])
+    if "company_id" in doc and doc["company_id"]:
+        doc["company_id"] = str(doc["company_id"])
+    return QuestionPublic(**doc)
+
+
+@router.get("/random.json", response_model=QuestionPublic, status_code=status.HTTP_200_OK)
+async def random_question_json(
+    company_id: str,
+    timeframe: Optional[str] = Query(default="30_days"),
+    update: Optional[str] = Query(default=None),
+    difficulty: Optional[str] = Query(default=None),
+    topics: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """Alias for /companies/{company_id}/questions/random with .json extension for frontend compatibility"""
+    company_obj_id = ObjectId(company_id)
+    query: dict = {"company_id": company_obj_id}
+    if timeframe:
+        query["timeframe"] = timeframe
+
+    if update:
+        # format like 'Jan 25'
+        parts = update.split()
+        if len(parts) == 2:
+            month_name, year_suffix = parts
+            year_str = "20" + year_suffix
+            try:
+                from calendar import month_abbr
+
+                month_number = list(month_abbr).index(month_name.capitalize())
+                year = int(year_str)
+                if 2000 <= year <= 2099 and month_number > 0:
+                    start = date(year, month_number, 1)
+                    # crude end_of_month
+                    if month_number == 12:
+                        end = date(year + 1, 1, 1)
+                    else:
+                        end = date(year, month_number + 1, 1)
+                    start_dt = datetime.combine(start, datetime.min.time())
+                    end_dt = datetime.combine(end, datetime.min.time())
+                    query["updated_at"] = {"$gte": start_dt, "$lt": end_dt}
+            except Exception:
+                pass
+
+    if difficulty:
+        query["difficulty"] = difficulty.upper()
+
+    if topics:
+        topic_filters = _build_topic_filters(topics)
+        if topic_filters:
+            query["$or"] = topic_filters
+
+    solved_ids = await _current_user_solved_ids(db, user_id)
+    if solved_ids:
+        query["_id"] = {"$nin": list(solved_ids)}
+
+    count = await db["questions"].count_documents(query)
+    if count == 0:
+        return QuestionPublic.model_validate({})  # triggers 200 with empty object
+
+    skip = random.randint(0, count - 1)
+    docs = await db["questions"].find(query).skip(skip).limit(1).to_list(1)
+    if not docs:
+        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
+
+    doc = docs[0]
+    doc["id"] = str(doc["_id"])
+    if "company_id" in doc and doc["company_id"]:
+        doc["company_id"] = str(doc["company_id"])
     return QuestionPublic(**doc)
 
 

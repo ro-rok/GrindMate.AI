@@ -85,12 +85,26 @@ async def refresh_company_questions(company_id: str):
                     }
                 )
 
+                # Handle frequency - can be int or float string
+                frequency_str = row.get("Frequency", "0").strip()
+                try:
+                    frequency = int(float(frequency_str)) if frequency_str else 0
+                except (ValueError, TypeError):
+                    frequency = 0
+                
+                # Handle acceptance rate
+                acceptance_rate_str = row.get("Acceptance Rate", "0").strip()
+                try:
+                    acceptance_rate = float(acceptance_rate_str) if acceptance_rate_str else 0.0
+                except (ValueError, TypeError):
+                    acceptance_rate = 0.0
+                
                 update_doc = {
                     "title": title,
                     "link": link,
                     "difficulty": row.get("Difficulty", "").strip(),
-                    "frequency": int(row.get("Frequency") or 0),
-                    "acceptance_rate": float(row.get("Acceptance Rate") or 0.0),
+                    "frequency": frequency,
+                    "acceptance_rate": acceptance_rate,
                     "topics": row.get("Topics", "").strip(),
                     "company_id": company["_id"],
                     "timeframe": timeframe,

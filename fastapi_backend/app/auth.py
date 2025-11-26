@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
-from fastapi import Cookie, Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -42,11 +42,12 @@ def create_access_token(subject: str, expires_delta: Optional[timedelta] = None)
 async def get_current_user(
     request: Request,
     db: AsyncIOMotorDatabase = Depends(get_database),
-    session: Optional[str] = Cookie(default=None, alias=get_settings().access_token_cookie_name),
 ) -> UserInDB:
+    settings = get_settings()
+    # Get cookie from request
+    session = request.cookies.get(settings.access_token_cookie_name)
     if not session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    settings = get_settings()
     try:
         payload = jwt.decode(session, settings.secret_key, algorithms=["HS256"])
         user_id = payload.get("sub")
