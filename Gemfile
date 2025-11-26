@@ -3,12 +3,8 @@ ruby '3.3.10'
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.0.2"
-# Use mysql as the database for Active Record
+# Use MongoDB via Mongoid as the database
 gem "mongoid", "~> 9.0"
-
-group :data_migration do
-  gem "pg", require: false
-end
 
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
