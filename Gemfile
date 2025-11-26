@@ -1,11 +1,10 @@
 source "https://rubygems.org"
-ruby '3.3.7'
+ruby '3.3.10'
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.0.2"
 # Use mysql as the database for Active Record
 gem "mongoid", "~> 9.0"
-gem "devise-mongoid", "~> 7.0"
 
 group :data_migration do
   gem "pg", require: false
