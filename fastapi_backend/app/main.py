@@ -12,11 +12,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="LeetCode Tracker FastAPI Backend")
 
     # CORS - frontend_origins is already a list from the validator
-    origins = settings.frontend_origins if isinstance(settings.frontend_origins, list) else [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://grindmate-ai.vercel.app"
-    ]
+    origins = settings.frontend_origins
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
