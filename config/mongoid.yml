@@ -5,8 +5,7 @@ development:
       options:
         server_selection_timeout: 5
   options:
-    use_activesupport_time_zone: true
-    belong_to_required_by_default: false
+    belongs_to_required_by_default: false
 
 test:
   clients:
@@ -15,8 +14,7 @@ test:
       options:
         server_selection_timeout: 5
   options:
-    use_activesupport_time_zone: true
-    belong_to_required_by_default: false
+    belongs_to_required_by_default: false
 
 production:
   clients:
@@ -25,6 +23,5 @@ production:
       options:
         server_selection_timeout: 5
   options:
-    use_activesupport_time_zone: true
-    belong_to_required_by_default: false
+    belongs_to_required_by_default: false
 

@@ -224,3 +224,5 @@ module DataMigration
   end
 end
 
+SqlToMongo = DataMigration::SqlToMongo
+

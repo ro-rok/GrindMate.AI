@@ -10,6 +10,7 @@ require "action_view/railtie"
 require "action_cable/engine"
 require "rails/test_unit/railtie"
 
+require "mongoid"
 require "mongoid/railtie"
 
 if ['development', 'test'].include?(ENV['RAILS_ENV'] || ENV['RACK_ENV'])
