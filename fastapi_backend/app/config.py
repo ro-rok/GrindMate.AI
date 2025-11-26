@@ -1,6 +1,7 @@
 import os
 from functools import lru_cache
-from pydantic import AnyHttpUrl, BaseSettings, field_validator
+from pydantic import AnyHttpUrl, field_validator
+from pydantic_settings import BaseSettings
 from typing import List
 
 
@@ -37,9 +38,10 @@ class Settings(BaseSettings):
     groq_api_key: str | None = os.getenv("GROQ_API_KEY")
     groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8"
+    }
 
 
 @lru_cache
