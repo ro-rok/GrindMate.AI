@@ -2,12 +2,13 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import date
+from typing import Optional, List, Dict, Any
+from datetime import date, datetime
 
 from ..db import get_database
 from ..auth import CurrentUser
 from ..services.streak_service import StreakService
+from ..services.analytics_service import AnalyticsService
 
 
 router = APIRouter(tags=["users"])
@@ -19,6 +20,50 @@ class StreakResponse(BaseModel):
     longest_streak: int
     last_solve_date: Optional[date]
     calendar_heatmap: List[dict]  # [{"date": "2025-01-22", "count": 3}, ...]
+
+
+class WeakTopicResponse(BaseModel):
+    """Response model for weak topic"""
+    topic: str
+    solve_rate: float
+    attempts: int
+    solved: int
+
+
+class PatternDistributionItem(BaseModel):
+    """Response model for pattern distribution item"""
+    solved: int
+    total: int
+
+
+class SolveStatsResponse(BaseModel):
+    """Response model for solve statistics"""
+    total_solved: int
+    by_difficulty: Dict[str, int]
+    solve_rate_last_10: float
+
+
+class RateBudgetResponse(BaseModel):
+    """Response model for rate budget information"""
+    tokens_remaining: int
+    requests_remaining: int
+    reset_at: Optional[datetime]
+
+
+class StreakInfo(BaseModel):
+    """Streak information for analytics response"""
+    current: int
+    longest: int
+    last_solve_date: Optional[date]
+
+
+class AnalyticsResponse(BaseModel):
+    """Response model for analytics endpoint"""
+    streak: StreakInfo
+    solve_stats: SolveStatsResponse
+    weak_topics: List[WeakTopicResponse]
+    pattern_distribution: Dict[str, PatternDistributionItem]
+    rate_budget: RateBudgetResponse
 
 
 @router.get("/users/me/streak", response_model=StreakResponse)
@@ -103,5 +148,77 @@ async def reset_progress(
         await db["user_questions"].delete_many({"user_id": user_obj_id})
 
     return
+
+
+@router.get("/users/me/analytics", response_model=AnalyticsResponse)
+async def get_user_analytics(
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Get comprehensive analytics for the current user.
+    
+    Returns:
+        - streak: Current and longest streak information
+        - solve_stats: Total solved count, by difficulty, and recent solve rate
+        - weak_topics: Topics with <50% solve rate and ≥3 attempts
+        - pattern_distribution: Solve statistics for all patterns
+        - rate_budget: Remaining AI usage budget
+    
+    Requirements: 11.1-11.7
+    """
+    analytics_service = AnalyticsService(db)
+    
+    # Calculate weak topics
+    weak_topics = await analytics_service.calculate_weak_topics(current_user.id)
+    weak_topics_response = [
+        WeakTopicResponse(
+            topic=wt.topic,
+            solve_rate=wt.solve_rate,
+            attempts=wt.attempts,
+            solved=wt.solved
+        )
+        for wt in weak_topics
+    ]
+    
+    # Calculate pattern distribution
+    pattern_distribution = await analytics_service.calculate_pattern_distribution(current_user.id)
+    pattern_distribution_response = {
+        pattern: PatternDistributionItem(
+            solved=stats.solved,
+            total=stats.total
+        )
+        for pattern, stats in pattern_distribution.items()
+    }
+    
+    # Calculate solve stats by difficulty
+    by_difficulty = await analytics_service.calculate_solve_stats_by_difficulty(current_user.id)
+    
+    # Calculate total solved
+    total_solved = sum(by_difficulty.values())
+    
+    # Calculate recent solve rate
+    solve_rate_last_10 = await analytics_service.calculate_recent_solve_rate(current_user.id, last_n=10)
+    
+    # Build response
+    return AnalyticsResponse(
+        streak=StreakInfo(
+            current=current_user.current_streak,
+            longest=current_user.longest_streak,
+            last_solve_date=current_user.last_solve_date
+        ),
+        solve_stats=SolveStatsResponse(
+            total_solved=total_solved,
+            by_difficulty=by_difficulty,
+            solve_rate_last_10=solve_rate_last_10
+        ),
+        weak_topics=weak_topics_response,
+        pattern_distribution=pattern_distribution_response,
+        rate_budget=RateBudgetResponse(
+            tokens_remaining=current_user.rate_budget_tokens,
+            requests_remaining=current_user.rate_budget_requests,
+            reset_at=current_user.rate_budget_reset_at
+        )
+    )
 
 
