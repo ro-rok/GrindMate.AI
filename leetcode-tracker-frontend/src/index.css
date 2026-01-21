@@ -1,33 +1,63 @@
 @import "tailwindcss";
 
-body, html {
-    overflow: hidden;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-  }
-  
+/* Apply design system base styles */
+body {
+  background-color: var(--black-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  line-height: var(--leading-normal);
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
 
+html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+/* Disable smooth scroll for reduced motion users */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Custom scrollbar styling */
 ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #0f172a;
+  background: var(--black-elevated);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #1e40af;
-    border-radius: 4px;
+  background: var(--accent-primary);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #2563eb;
+  background: var(--accent-primary-hover);
 }
 
-/* Firefox scrollbar support for specific elements */
+/* Firefox scrollbar support */
 * {
-    scrollbar-width: thin;
-    scrollbar-color: #1e40af #0f172a;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-primary) var(--black-elevated);
+}
+
+/* Focus visible styles for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--accent-primary);
+  color: var(--black-base);
 }
