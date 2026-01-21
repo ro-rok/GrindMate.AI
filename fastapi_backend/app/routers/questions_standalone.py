@@ -4,14 +4,31 @@ from typing import Optional
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
 
 from ..db import get_database
+from ..services.streak_service import StreakService
+
 
 router = APIRouter(prefix="/questions", tags=["questions"])
 
 
-@router.post("/{question_id}/solve")
-@router.post("/{question_id}/solve.json")
+class SolveRequest(BaseModel):
+    """Request body for solve endpoint"""
+    time_spent_seconds: Optional[int] = 0
+
+
+class SolveResponse(BaseModel):
+    """Response for solve endpoint"""
+    solved: bool
+    question_id: str
+    streak_updated: bool = False
+    new_streak: int = 0
+    milestone_reached: Optional[int] = None
+
+
+@router.post("/{question_id}/solve", response_model=SolveResponse)
+@router.post("/{question_id}/solve.json", response_model=SolveResponse)
 async def solve_question(
     question_id: str,
     request: Request,
@@ -21,13 +38,15 @@ async def solve_question(
     # Get user_id from query params (frontend sends it as query param)
     user_id = request.query_params.get("user_id")
     
-    # If not in query params, try body
-    if not user_id:
-        try:
-            body = await request.json()
+    # Parse request body for time_spent_seconds
+    time_spent_seconds = 0
+    try:
+        body = await request.json()
+        if not user_id:
             user_id = body.get("user_id")
-        except Exception:
-            pass
+        time_spent_seconds = body.get("time_spent_seconds", 0)
+    except Exception:
+        pass
     
     if not user_id:
         raise HTTPException(
@@ -46,8 +65,14 @@ async def solve_question(
     now = datetime.utcnow()
 
     # Get user and question to preserve legacy_id fields if they exist
-    user_doc = await db["users"].find_one({"_id": user_obj_id}, {"legacy_id": 1})
+    user_doc = await db["users"].find_one({"_id": user_obj_id}, {"legacy_id": 1, "timezone": 1})
     question_doc = await db["questions"].find_one({"_id": question_obj_id}, {"legacy_id": 1})
+    
+    if not user_doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
     # Check if user_question already exists
     existing = await db["user_questions"].find_one(
@@ -61,6 +86,13 @@ async def solve_question(
         "solved_at": now,
         "updated_at": now,
     }
+    
+    # Add time_spent_seconds if provided
+    if time_spent_seconds > 0:
+        if existing and "time_spent_seconds" in existing:
+            set_doc["time_spent_seconds"] = existing["time_spent_seconds"] + time_spent_seconds
+        else:
+            set_doc["time_spent_seconds"] = time_spent_seconds
     
     set_on_insert_doc = {"created_at": now}
     
@@ -87,8 +119,22 @@ async def solve_question(
         },
         upsert=True,
     )
+    
+    # Update streak
+    streak_service = StreakService(db)
+    user_timezone = user_doc.get("timezone", "UTC")
+    streak_info = await streak_service.update_streak_on_solve(
+        user_id=user_obj_id,
+        timezone=user_timezone
+    )
 
-    return {"solved": True, "question_id": question_id}
+    return SolveResponse(
+        solved=True,
+        question_id=question_id,
+        streak_updated=streak_info["streak_updated"],
+        new_streak=streak_info["new_streak"],
+        milestone_reached=streak_info["milestone_reached"]
+    )
 
 
 @router.delete("/{question_id}/solve")
@@ -130,6 +176,16 @@ async def unsolve_question(
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    
+    # Update streak after unsolving
+    user_doc = await db["users"].find_one({"_id": user_obj_id}, {"timezone": 1})
+    if user_doc:
+        streak_service = StreakService(db)
+        user_timezone = user_doc.get("timezone", "UTC")
+        await streak_service.update_streak_on_unsolve(
+            user_id=user_obj_id,
+            timezone=user_timezone
+        )
 
     return {"solved": False, "question_id": question_id}
 

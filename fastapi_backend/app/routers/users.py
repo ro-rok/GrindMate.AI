@@ -1,11 +1,57 @@
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import date
 
 from ..db import get_database
+from ..auth import CurrentUser
+from ..services.streak_service import StreakService
 
 
 router = APIRouter(tags=["users"])
+
+
+class StreakResponse(BaseModel):
+    """Response model for streak endpoint"""
+    current_streak: int
+    longest_streak: int
+    last_solve_date: Optional[date]
+    calendar_heatmap: List[dict]  # [{"date": "2025-01-22", "count": 3}, ...]
+
+
+@router.get("/users/me/streak", response_model=StreakResponse)
+async def get_user_streak(
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Get current user's streak information.
+    
+    Returns:
+        - current_streak: Number of consecutive days with at least one solve
+        - longest_streak: Highest streak ever achieved
+        - last_solve_date: Date of most recent solve
+        - calendar_heatmap: Last 30 days of solve activity
+    
+    Requirements: 10.1-10.7
+    """
+    streak_service = StreakService(db)
+    
+    # Get calendar heatmap data (last 30 days)
+    calendar_heatmap = await streak_service.get_calendar_heatmap_data(
+        user_id=current_user.id,
+        timezone=current_user.timezone,
+        days=30
+    )
+    
+    return StreakResponse(
+        current_streak=current_user.current_streak,
+        longest_streak=current_user.longest_streak,
+        last_solve_date=current_user.last_solve_date,
+        calendar_heatmap=calendar_heatmap
+    )
 
 
 @router.post("/users/reset_progress", status_code=status.HTTP_204_NO_CONTENT)
