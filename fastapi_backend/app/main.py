@@ -12,7 +12,7 @@ from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
 from .routers import auth, companies, ping, questions, questions_standalone, users, chats, patterns, tutor
 from .init_db import create_indexes
-from .middleware import CSRFMiddleware
+from .middleware import CSRFMiddleware, RateLimitMiddleware
 
 
 @asynccontextmanager
@@ -47,6 +47,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Rate Limit Middleware (before CSRF for early rejection)
+    app.add_middleware(RateLimitMiddleware)
     
     # CSRF Protection Middleware
     app.add_middleware(CSRFMiddleware)

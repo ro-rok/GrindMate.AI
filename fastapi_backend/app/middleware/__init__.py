@@ -1,4 +1,5 @@
 """Middleware package for FastAPI application."""
 from .csrf_middleware import CSRFMiddleware
+from .rate_limit_middleware import RateLimitMiddleware
 
-__all__ = ["CSRFMiddleware"]
+__all__ = ["CSRFMiddleware", "RateLimitMiddleware"]

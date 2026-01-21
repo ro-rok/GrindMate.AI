@@ -20,6 +20,8 @@ from ..db import get_database
 from ..models.chat_message import ChatMessage
 from ..models.hint_unlock import HintUnlock
 from ..models.rate_limit import RateLimit
+from .rate_limit_service import get_rate_limit_service
+from .encryption_service import get_encryption_service
 
 
 # Load hint prompts configuration
@@ -34,6 +36,8 @@ class TutorService:
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
         self.db = db or get_database()
         self.settings = get_settings()
+        self.rate_limit_service = get_rate_limit_service(self.db)
+        self.encryption_service = get_encryption_service()
         
     async def get_unlocked_hints(
         self,
@@ -346,11 +350,26 @@ Guidance for this level:
         
         Returns dict with content and tokens_used
         """
-        if not self.settings.groq_api_key:
-            raise RuntimeError("GROQ_API_KEY is not configured")
+        # Get user to check for BYOK key
+        user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
         
-        # Check rate limit
-        await self._check_rate_limit(user_id)
+        # Determine which API key to use
+        api_key = None
+        if user and user.get("byok_groq_key"):
+            # Decrypt user's BYOK key
+            encrypted_key = user["byok_groq_key"]
+            api_key = self.encryption_service.decrypt_api_key(encrypted_key)
+            if not api_key:
+                raise RuntimeError("Failed to decrypt BYOK API key")
+        else:
+            # Use server key
+            api_key = self.settings.groq_api_key
+            if not api_key:
+                raise RuntimeError("GROQ_API_KEY is not configured")
+        
+        # Check rate limit (BYOK users bypass this)
+        if not (user and user.get("byok_groq_key")):
+            await self._check_rate_limit(user_id)
         
         # Build messages
         messages = [{"role": "system", "content": system_prompt}]
@@ -363,7 +382,7 @@ Guidance for this level:
         
         # Call API
         headers = {
-            "Authorization": f"Bearer {self.settings.groq_api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
@@ -388,8 +407,9 @@ Guidance for this level:
         content = data["choices"][0]["message"]["content"]
         tokens_used = data.get("usage", {}).get("total_tokens", 0)
         
-        # Update rate limit
-        await self._update_rate_limit(user_id, tokens_used)
+        # Update rate limit (only for non-BYOK users)
+        if not (user and user.get("byok_groq_key")):
+            await self._update_rate_limit(user_id, tokens_used)
         
         return {
             "content": content,
@@ -402,77 +422,38 @@ Guidance for this level:
         
         Raises HTTPException if limit exceeded
         """
-        # Get user to check BYOK
+        # Get user to get timezone
         user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
-        if user and user.get("byok_groq_key"):
-            # BYOK users bypass rate limits
-            return
+        user_timezone = user.get("timezone", "UTC") if user else "UTC"
         
-        # Get today's rate limit record
-        today = datetime.utcnow().date()
-        rate_limit = await self.db["rate_limits"].find_one({
-            "user_id": ObjectId(user_id),
-            "date": today
-        })
+        # Check rate limit using service
+        is_allowed, info = await self.rate_limit_service.check_rate_limit(
+            user_id, user_timezone
+        )
         
-        if not rate_limit:
-            return  # No usage yet today
-        
-        # Check limits (25k tokens, 30 requests per day)
-        if rate_limit.get("tokens_used", 0) >= 25000:
+        if not is_allowed:
             from fastapi import HTTPException
             raise HTTPException(
                 status_code=429,
                 detail={
                     "error": "Rate limit exceeded",
-                    "rate_budget_remaining": 0,
-                    "reset_at": self._get_next_reset_time(user).isoformat(),
-                    "alternatives": ["cached_hints", "byok_mode"]
-                }
-            )
-        
-        if rate_limit.get("requests_made", 0) >= 30:
-            from fastapi import HTTPException
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "Request limit exceeded",
-                    "rate_budget_remaining": 0,
-                    "reset_at": self._get_next_reset_time(user).isoformat(),
+                    "rate_budget_remaining": info["tokens_remaining"],
+                    "reset_at": info["reset_at"],
                     "alternatives": ["cached_hints", "byok_mode"]
                 }
             )
     
     async def _update_rate_limit(self, user_id: str, tokens_used: int) -> None:
         """Update rate limit counters"""
-        today = datetime.utcnow().date()
+        # Get user to get timezone
+        user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
+        user_timezone = user.get("timezone", "UTC") if user else "UTC"
         
-        # Upsert rate limit record
-        await self.db["rate_limits"].update_one(
-            {
-                "user_id": ObjectId(user_id),
-                "date": today
-            },
-            {
-                "$inc": {
-                    "tokens_used": tokens_used,
-                    "requests_made": 1
-                },
-                "$setOnInsert": {
-                    "created_at": datetime.utcnow(),
-                    "expires_at": datetime.utcnow() + timedelta(days=2)
-                }
-            },
-            upsert=True
+        # Update using service
+        await self.rate_limit_service.consume_budget(
+            user_id, tokens_used, user_timezone
         )
     
-    def _get_next_reset_time(self, user: Optional[Dict[str, Any]]) -> datetime:
-        """Get next rate limit reset time (midnight in user's timezone)"""
-        # For now, use UTC midnight
-        # TODO: Use user's timezone from user.get("timezone")
-        now = datetime.utcnow()
-        tomorrow = now.date() + timedelta(days=1)
-        return datetime.combine(tomorrow, datetime.min.time())
     
     async def _get_conversation_history(
         self,

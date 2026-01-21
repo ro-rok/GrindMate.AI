@@ -9,6 +9,7 @@ from ..db import get_database
 from ..auth import CurrentUser
 from ..services.streak_service import StreakService
 from ..services.analytics_service import AnalyticsService
+from ..services.encryption_service import get_encryption_service
 
 
 router = APIRouter(tags=["users"])
@@ -48,6 +49,18 @@ class RateBudgetResponse(BaseModel):
     tokens_remaining: int
     requests_remaining: int
     reset_at: Optional[datetime]
+
+
+class BYOKRequest(BaseModel):
+    """Request model for setting BYOK API key"""
+    groq_api_key: str
+
+
+class BYOKResponse(BaseModel):
+    """Response model for BYOK operations"""
+    success: bool
+    message: str
+    byok_enabled: bool
 
 
 class StreakInfo(BaseModel):
@@ -222,3 +235,99 @@ async def get_user_analytics(
     )
 
 
+
+
+@router.post("/users/me/byok", response_model=BYOKResponse)
+async def set_byok_key(
+    request: BYOKRequest,
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Set or update user's BYOK (Bring Your Own Key) Groq API key.
+    
+    When a user provides their own API key, they bypass rate limits.
+    The key is encrypted before storage.
+    
+    Args:
+        request: Contains the Groq API key
+        
+    Returns:
+        Success status and confirmation message
+    
+    Requirements: 13.5, 13.6
+    """
+    encryption_service = get_encryption_service()
+    
+    # Validate API key format (basic check)
+    api_key = request.groq_api_key.strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key cannot be empty"
+        )
+    
+    # Encrypt the API key
+    encrypted_key = encryption_service.encrypt_api_key(api_key)
+    
+    # Update user document
+    await db["users"].update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": {"byok_groq_key": encrypted_key}}
+    )
+    
+    return BYOKResponse(
+        success=True,
+        message="BYOK API key set successfully. Rate limits are now bypassed.",
+        byok_enabled=True
+    )
+
+
+@router.delete("/users/me/byok", response_model=BYOKResponse)
+async def remove_byok_key(
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Remove user's BYOK API key and return to standard rate limits.
+    
+    Returns:
+        Success status and confirmation message
+    
+    Requirements: 13.5, 13.6
+    """
+    # Remove BYOK key from user document
+    await db["users"].update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$unset": {"byok_groq_key": ""}}
+    )
+    
+    return BYOKResponse(
+        success=True,
+        message="BYOK API key removed. Standard rate limits now apply.",
+        byok_enabled=False
+    )
+
+
+@router.get("/users/me/byok/status", response_model=BYOKResponse)
+async def get_byok_status(
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Check if user has BYOK enabled.
+    
+    Returns:
+        BYOK status
+    
+    Requirements: 13.5, 13.6
+    """
+    user = await db["users"].find_one({"_id": ObjectId(current_user.id)})
+    
+    byok_enabled = bool(user and user.get("byok_groq_key"))
+    
+    return BYOKResponse(
+        success=True,
+        message="BYOK enabled" if byok_enabled else "BYOK not enabled",
+        byok_enabled=byok_enabled
+    )
