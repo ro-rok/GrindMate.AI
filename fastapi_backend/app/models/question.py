@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from bson import ObjectId
 from pydantic import field_serializer
 from .common import MongoModel, PyObjectId
@@ -13,6 +13,8 @@ class QuestionPublic(MongoModel):
     timeframe: Optional[str] = None
     topics: Optional[str] = None
     company_id: Optional[PyObjectId] = None
+    patterns: List[str] = []
+    removed: bool = False
 
     @field_serializer("company_id")
     def serialize_company_id(self, v: Optional[PyObjectId]) -> Optional[str]:
@@ -27,5 +29,6 @@ class QuestionPublic(MongoModel):
 
 class QuestionWithSolved(QuestionPublic):
     solved: bool = False
+    priority_score: Optional[float] = None
 
 
