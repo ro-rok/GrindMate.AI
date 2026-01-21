@@ -10,7 +10,7 @@ from .config import get_settings
 from .db import get_database
 from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
-from .routers import auth, companies, ping, questions, questions_standalone, users, chats, patterns
+from .routers import auth, companies, ping, questions, questions_standalone, users, chats, patterns, tutor
 from .init_db import create_indexes
 from .middleware import CSRFMiddleware
 
@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(questions_standalone.router)  # Standalone /questions/{id}/solve routes
     app.include_router(chats.router)
     app.include_router(patterns.router)
+    app.include_router(tutor.router)
 
     @app.get("/health")
     async def health(db: AsyncIOMotorDatabase = Depends(get_database)):

@@ -32,3 +32,8 @@ class QuestionWithSolved(QuestionPublic):
     priority_score: Optional[float] = None
 
 
+class SmartRandomResponse(QuestionPublic):
+    priority_score: float
+    reason: str
+
+

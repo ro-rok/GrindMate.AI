@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ..db import get_database
-from ..models.question import QuestionPublic, QuestionWithSolved
+from ..models.question import QuestionPublic, QuestionWithSolved, SmartRandomResponse
 from ..services.streak_service import StreakService
+from ..services.smart_random import SmartRandomService
 
 
 router = APIRouter(prefix="/companies/{company_id}/questions", tags=["questions"])
@@ -87,21 +88,49 @@ async def list_questions(
 
 
 
-@router.get("/random", response_model=QuestionPublic, status_code=status.HTTP_200_OK)
+@router.get("/random", response_model=SmartRandomResponse, status_code=status.HTTP_200_OK)
 async def random_question(
     company_id: str,
     timeframe: Optional[str] = Query(default="30_days"),
     update: Optional[str] = Query(default=None),
     difficulty: Optional[str] = Query(default=None),
     topics: Optional[str] = Query(default=None),
+    patterns: Optional[str] = Query(default=None),
     user_id: Optional[str] = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    company_obj_id = ObjectId(company_id)
-    query: dict = {"company_id": company_obj_id}
+    """
+    Smart random question selection.
+    
+    Uses intelligent algorithm weighted by:
+    - Timeframe (recent questions prioritized)
+    - Weakness (weak patterns boosted)
+    - Difficulty (adaptive based on recent solve rate)
+    - Novelty (penalize recently selected questions)
+    
+    Requirements: 5.1-5.11
+    """
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="user_id required for smart random selection"
+        )
+    
+    try:
+        company_obj_id = ObjectId(company_id)
+        user_obj_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid company_id or user_id"
+        )
+    
+    # Build filters
+    filters: dict = {"company_id": company_obj_id}
+    
     if timeframe:
-        query["timeframe"] = timeframe
-
+        filters["timeframe"] = timeframe
+    
     if update:
         # format like 'Jan 25'
         parts = update.split()
@@ -110,7 +139,6 @@ async def random_question(
             year_str = "20" + year_suffix
             try:
                 from calendar import month_abbr
-
                 month_number = list(month_abbr).index(month_name.capitalize())
                 year = int(year_str)
                 if 2000 <= year <= 2099 and month_number > 0:
@@ -122,54 +150,84 @@ async def random_question(
                         end = date(year, month_number + 1, 1)
                     start_dt = datetime.combine(start, datetime.min.time())
                     end_dt = datetime.combine(end, datetime.min.time())
-                    query["updated_at"] = {"$gte": start_dt, "$lt": end_dt}
+                    filters["updated_at"] = {"$gte": start_dt, "$lt": end_dt}
             except Exception:
                 pass
-
+    
     if difficulty:
-        query["difficulty"] = difficulty.upper()
-
+        filters["difficulty"] = difficulty.upper()
+    
     if topics:
         topic_filters = _build_topic_filters(topics)
         if topic_filters:
-            query["$or"] = topic_filters
+            filters["$or"] = topic_filters
+    
+    if patterns:
+        # Filter by patterns (OR logic)
+        pattern_list = [p.strip() for p in patterns.split(",") if p.strip()]
+        if pattern_list:
+            filters["patterns"] = {"$in": pattern_list}
+    
+    # Use smart random service
+    smart_random_service = SmartRandomService(db)
+    selected_question = await smart_random_service.select_smart_random(
+        user_id=user_obj_id,
+        filters=filters
+    )
+    
+    if not selected_question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No unsolved questions matching filters"
+        )
+    
+    # Convert ObjectIds to strings for serialization
+    selected_question["id"] = str(selected_question["_id"])
+    selected_question.pop("_id", None)
+    if "company_id" in selected_question and selected_question["company_id"]:
+        selected_question["company_id"] = str(selected_question["company_id"])
+    
+    return SmartRandomResponse(**selected_question)
 
-    solved_ids = await _current_user_solved_ids(db, user_id)
-    if solved_ids:
-        query["_id"] = {"$nin": list(solved_ids)}
 
-    count = await db["questions"].count_documents(query)
-    if count == 0:
-        return QuestionPublic.model_validate({})  # triggers 200 with empty object
-
-    skip = random.randint(0, count - 1)
-    docs = await db["questions"].find(query).skip(skip).limit(1).to_list(1)
-    if not docs:
-        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
-
-    doc = docs[0]
-    doc["id"] = str(doc["_id"])
-    if "company_id" in doc and doc["company_id"]:
-        doc["company_id"] = str(doc["company_id"])
-    return QuestionPublic(**doc)
-
-
-@router.get("/random.json", response_model=QuestionPublic, status_code=status.HTTP_200_OK)
+@router.get("/random.json", response_model=SmartRandomResponse, status_code=status.HTTP_200_OK)
 async def random_question_json(
     company_id: str,
     timeframe: Optional[str] = Query(default="30_days"),
     update: Optional[str] = Query(default=None),
     difficulty: Optional[str] = Query(default=None),
     topics: Optional[str] = Query(default=None),
+    patterns: Optional[str] = Query(default=None),
     user_id: Optional[str] = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
-    """Alias for /companies/{company_id}/questions/random with .json extension for frontend compatibility"""
-    company_obj_id = ObjectId(company_id)
-    query: dict = {"company_id": company_obj_id}
+    """
+    Alias for /companies/{company_id}/questions/random with .json extension for frontend compatibility.
+    
+    Uses smart random selection algorithm.
+    Requirements: 5.1-5.11
+    """
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="user_id required for smart random selection"
+        )
+    
+    try:
+        company_obj_id = ObjectId(company_id)
+        user_obj_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid company_id or user_id"
+        )
+    
+    # Build filters
+    filters: dict = {"company_id": company_obj_id}
+    
     if timeframe:
-        query["timeframe"] = timeframe
-
+        filters["timeframe"] = timeframe
+    
     if update:
         # format like 'Jan 25'
         parts = update.split()
@@ -178,7 +236,6 @@ async def random_question_json(
             year_str = "20" + year_suffix
             try:
                 from calendar import month_abbr
-
                 month_number = list(month_abbr).index(month_name.capitalize())
                 year = int(year_str)
                 if 2000 <= year <= 2099 and month_number > 0:
@@ -190,36 +247,44 @@ async def random_question_json(
                         end = date(year, month_number + 1, 1)
                     start_dt = datetime.combine(start, datetime.min.time())
                     end_dt = datetime.combine(end, datetime.min.time())
-                    query["updated_at"] = {"$gte": start_dt, "$lt": end_dt}
+                    filters["updated_at"] = {"$gte": start_dt, "$lt": end_dt}
             except Exception:
                 pass
-
+    
     if difficulty:
-        query["difficulty"] = difficulty.upper()
-
+        filters["difficulty"] = difficulty.upper()
+    
     if topics:
         topic_filters = _build_topic_filters(topics)
         if topic_filters:
-            query["$or"] = topic_filters
-
-    solved_ids = await _current_user_solved_ids(db, user_id)
-    if solved_ids:
-        query["_id"] = {"$nin": list(solved_ids)}
-
-    count = await db["questions"].count_documents(query)
-    if count == 0:
-        return QuestionPublic.model_validate({})  # triggers 200 with empty object
-
-    skip = random.randint(0, count - 1)
-    docs = await db["questions"].find(query).skip(skip).limit(1).to_list(1)
-    if not docs:
-        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
-
-    doc = docs[0]
-    doc["id"] = str(doc["_id"])
-    if "company_id" in doc and doc["company_id"]:
-        doc["company_id"] = str(doc["company_id"])
-    return QuestionPublic(**doc)
+            filters["$or"] = topic_filters
+    
+    if patterns:
+        # Filter by patterns (OR logic)
+        pattern_list = [p.strip() for p in patterns.split(",") if p.strip()]
+        if pattern_list:
+            filters["patterns"] = {"$in": pattern_list}
+    
+    # Use smart random service
+    smart_random_service = SmartRandomService(db)
+    selected_question = await smart_random_service.select_smart_random(
+        user_id=user_obj_id,
+        filters=filters
+    )
+    
+    if not selected_question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No unsolved questions matching filters"
+        )
+    
+    # Convert ObjectIds to strings for serialization
+    selected_question["id"] = str(selected_question["_id"])
+    selected_question.pop("_id", None)
+    if "company_id" in selected_question and selected_question["company_id"]:
+        selected_question["company_id"] = str(selected_question["company_id"])
+    
+    return SmartRandomResponse(**selected_question)
 
 
 @router.post("/{question_id}/solve")
