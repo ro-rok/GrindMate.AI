@@ -116,6 +116,10 @@ class TutorService:
         )
         await self.db["hint_unlocks"].insert_one(unlock.model_dump(by_alias=True))
         
+        # Track attempt if hint level >= 2 (Requirement 11.1)
+        if hint_level >= 2:
+            await self._increment_attempt(user_id, question_id)
+        
         return hint_data
     
     async def _generate_hint(
@@ -589,6 +593,39 @@ Guidance for this level:
             expires_at=expires_at
         )
         await self.db["chat_messages"].insert_one(hint_msg.model_dump(by_alias=True))
+    
+    async def _increment_attempt(
+        self,
+        user_id: str,
+        question_id: str
+    ) -> None:
+        """
+        Increment attempt counter for a user-question pair.
+        
+        An attempt is recorded when:
+        - User enters focus mode and stays ≥60 seconds
+        - User unlocks hint level ≥2
+        - User marks solved/unsolved
+        
+        Requirements: 11.1
+        """
+        now = datetime.utcnow()
+        
+        await self.db["user_questions"].update_one(
+            {
+                "user_id": ObjectId(user_id),
+                "question_id": ObjectId(question_id)
+            },
+            {
+                "$inc": {"attempts": 1},
+                "$set": {"last_attempt_at": now, "updated_at": now},
+                "$setOnInsert": {
+                    "solved": False,
+                    "created_at": now
+                }
+            },
+            upsert=True
+        )
 
 
 # Singleton instance

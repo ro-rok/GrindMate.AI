@@ -37,3 +37,10 @@ class SmartRandomResponse(QuestionPublic):
     reason: str
 
 
+class QuestionListResponse(MongoModel):
+    questions: List[QuestionWithSolved]
+    next_cursor: Optional[str] = None
+    has_more: bool
+    total_count: int
+
+

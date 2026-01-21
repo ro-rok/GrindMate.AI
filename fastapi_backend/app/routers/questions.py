@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ..db import get_database
-from ..models.question import QuestionPublic, QuestionWithSolved, SmartRandomResponse
+from ..models.question import QuestionPublic, QuestionWithSolved, SmartRandomResponse, QuestionListResponse
 from ..services.streak_service import StreakService
 from ..services.smart_random import SmartRandomService
 
@@ -41,17 +41,45 @@ def _build_topic_filters(topics_param: str) -> list[dict]:
     return filters
 
 
-@router.get("", response_model=List[QuestionWithSolved])
+@router.get("", response_model=QuestionListResponse)
 async def list_questions(
     company_id: str,
     timeframe: Optional[str] = Query(default=None),
     difficulty: Optional[str] = Query(default=None),
     topics: Optional[str] = Query(default=None),
+    patterns: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None, description="Search query for question title"),
+    sort: Optional[str] = Query(default="priority", description="Sort by: priority, recency, difficulty, title"),
+    cursor: Optional[str] = Query(default=None, description="Pagination cursor (question ID)"),
+    limit: int = Query(default=50, ge=1, le=100, description="Number of results per page"),
     user_id: Optional[str] = Query(default=None),
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    """
+    List questions with advanced filtering, search, sorting, and cursor pagination.
+    
+    Query Parameters:
+    - timeframe: Filter by recency (30_days, 90_days, more_than_six_months, all_time)
+    - difficulty: Filter by difficulty (EASY, MEDIUM, HARD)
+    - topics: Comma-separated topics (OR logic)
+    - patterns: Comma-separated patterns (OR logic)
+    - q: Search query for question title (case-insensitive)
+    - sort: Sort order (priority, recency, difficulty, title)
+    - cursor: Pagination cursor (question ID from previous response)
+    - limit: Number of results per page (1-100, default 50)
+    
+    Returns:
+    - questions: List of questions with solved status
+    - next_cursor: Cursor for next page (null if no more results)
+    - has_more: Boolean indicating if more results exist
+    - total_count: Total number of questions matching filters
+    
+    Requirements: 4.9, 4.10, 4.11
+    """
     company_obj_id = ObjectId(company_id)
     query: dict = {"company_id": company_obj_id}
+    
+    # Apply filters
     if timeframe:
         query["timeframe"] = timeframe
 
@@ -63,27 +91,75 @@ async def list_questions(
         if topic_filters:
             query["$or"] = topic_filters
 
+    if patterns:
+        # Filter by patterns (OR logic)
+        pattern_list = [p.strip() for p in patterns.split(",") if p.strip()]
+        if pattern_list:
+            query["patterns"] = {"$in": pattern_list}
+    
+    # Search by title (case-insensitive)
+    if q:
+        query["title"] = {"$regex": q, "$options": "i"}
+    
+    # Cursor pagination
+    if cursor:
+        try:
+            cursor_obj_id = ObjectId(cursor)
+            query["_id"] = {"$gt": cursor_obj_id}
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid cursor"
+            )
+    
+    # Get total count for current filters
+    total_count = await db["questions"].count_documents(query)
+    
+    # Determine sort order
+    sort_mapping = {
+        "priority": [("frequency", -1), ("updated_at", -1)],  # Higher frequency = higher priority
+        "recency": [("updated_at", -1)],
+        "difficulty": [("difficulty", 1), ("title", 1)],  # EASY < HARD < MEDIUM alphabetically
+        "title": [("title", 1)]
+    }
+    sort_order = sort_mapping.get(sort, sort_mapping["priority"])
+    
+    # Get solved question IDs for user
     solved_ids = await _current_user_solved_ids(db, user_id)
 
-    cursor = db["questions"].find(
-        query,
-        sort=[("frequency", 1), ("updated_at", 1)],
-    )
+    # Fetch questions with limit + 1 to check if more results exist
+    cursor_db = db["questions"].find(query).sort(sort_order).limit(limit + 1)
+    
     results: list[QuestionWithSolved] = []
-    async for doc in cursor:
-        # Check if solved before converting ObjectIds
+    docs = await cursor_db.to_list(length=limit + 1)
+    
+    # Check if more results exist
+    has_more = len(docs) > limit
+    if has_more:
+        docs = docs[:limit]  # Remove the extra document
+    
+    # Determine next cursor
+    next_cursor = None
+    if has_more and docs:
+        next_cursor = str(docs[-1]["_id"])
+    
+    # Convert documents to response models
+    for doc in docs:
         is_solved = doc["_id"] in solved_ids
-        # Convert all ObjectId fields to strings for serialization
         doc["id"] = str(doc["_id"])
-        # Remove _id field as it's not in the model
         doc.pop("_id", None)
-        # Convert any remaining ObjectId fields
         for key, value in list(doc.items()):
             if isinstance(value, ObjectId):
                 doc[key] = str(value)
-        q = QuestionWithSolved(**doc, solved=is_solved)
-        results.append(q)
-    return results
+        q_obj = QuestionWithSolved(**doc, solved=is_solved)
+        results.append(q_obj)
+    
+    return {
+        "questions": results,
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+        "total_count": total_count
+    }
 
 
 
@@ -334,7 +410,11 @@ async def solve_question(
         "solved": True,
         "solved_at": now,
         "updated_at": now,
+        "last_attempt_at": now,  # Track attempt on solve
     }
+    
+    # Increment attempts counter (Requirement 11.1)
+    inc_doc = {"attempts": 1}
     
     # Add time_spent_seconds if provided
     if time_spent_seconds > 0:
@@ -364,6 +444,7 @@ async def solve_question(
         {"user_id": user_obj_id, "question_id": question_obj_id},
         {
             "$set": set_doc,
+            "$inc": inc_doc,
             "$setOnInsert": set_on_insert_doc,
         },
         upsert=True,
@@ -408,9 +489,18 @@ async def unsolve_question(
             detail="Invalid ids",
         )
 
+    now = datetime.utcnow()
+    
     result = await db["user_questions"].update_one(
         {"user_id": user_obj_id, "question_id": question_obj_id},
-        {"$set": {"solved": False}},
+        {
+            "$set": {
+                "solved": False,
+                "last_attempt_at": now,
+                "updated_at": now
+            },
+            "$inc": {"attempts": 1}  # Track attempt on unsolve (Requirement 11.1)
+        },
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -426,6 +516,98 @@ async def unsolve_question(
         )
 
     return {"solved": False, "question_id": question_id}
+
+
+@router.post("/{question_id}/track-focus")
+async def track_focus_time(
+    company_id: str,  # kept for route parity
+    question_id: str,
+    body: dict,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Track focus mode time for attempt counting.
+    
+    An attempt is recorded when user enters focus mode and stays ≥60 seconds.
+    This endpoint should be called by the frontend when the user has been in
+    focus mode for at least 60 seconds.
+    
+    Requirements: 11.1
+    """
+    user_id = body.get("user_id")
+    time_spent_seconds = body.get("time_spent_seconds", 0)
+    
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing user_id",
+        )
+    
+    # Only track if time spent is >= 60 seconds
+    if time_spent_seconds < 60:
+        return {
+            "tracked": False,
+            "message": "Focus time must be at least 60 seconds to count as an attempt"
+        }
+    
+    try:
+        user_obj_id = ObjectId(user_id)
+        question_obj_id = ObjectId(question_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid ids",
+        )
+    
+    now = datetime.utcnow()
+    
+    # Check if we've already tracked an attempt for this focus session
+    # We'll use a simple heuristic: if last_attempt_at is within the last 5 minutes,
+    # don't increment again (to avoid double-counting)
+    existing = await db["user_questions"].find_one(
+        {"user_id": user_obj_id, "question_id": question_obj_id}
+    )
+    
+    should_increment = True
+    if existing and existing.get("last_attempt_at"):
+        time_since_last = (now - existing["last_attempt_at"]).total_seconds()
+        if time_since_last < 300:  # 5 minutes
+            should_increment = False
+    
+    update_doc = {
+        "$set": {
+            "last_attempt_at": now,
+            "updated_at": now
+        },
+        "$setOnInsert": {
+            "user_id": user_obj_id,
+            "question_id": question_obj_id,
+            "solved": False,
+            "created_at": now
+        }
+    }
+    
+    if should_increment:
+        update_doc["$inc"] = {"attempts": 1}
+    
+    # Add time spent
+    if time_spent_seconds > 0:
+        if existing and "time_spent_seconds" in existing:
+            update_doc["$set"]["time_spent_seconds"] = existing["time_spent_seconds"] + time_spent_seconds
+        else:
+            update_doc["$set"]["time_spent_seconds"] = time_spent_seconds
+    
+    await db["user_questions"].update_one(
+        {"user_id": user_obj_id, "question_id": question_obj_id},
+        update_doc,
+        upsert=True
+    )
+    
+    return {
+        "tracked": True,
+        "attempt_incremented": should_increment,
+        "time_spent_seconds": time_spent_seconds
+    }
 
 
 
