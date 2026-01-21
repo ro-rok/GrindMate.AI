@@ -1,4 +1,5 @@
 from typing import List, Optional
+from contextlib import asynccontextmanager
 
 from bson import ObjectId
 from fastapi import Depends, FastAPI, Query
@@ -10,11 +11,31 @@ from .db import get_database
 from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
 from .routers import auth, companies, ping, questions, questions_standalone, users, chats
+from .init_db import create_indexes
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager.
+    Handles startup and shutdown events.
+    """
+    # Startup: Create MongoDB indexes
+    db = get_database()
+    await create_indexes(db)
+    
+    yield
+    
+    # Shutdown: cleanup if needed
+    pass
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="LeetCode Tracker FastAPI Backend")
+    app = FastAPI(
+        title="LeetCode Tracker FastAPI Backend",
+        lifespan=lifespan
+    )
 
     # CORS - parse frontend_origins from comma-separated string
     origins = settings.frontend_origins_list
