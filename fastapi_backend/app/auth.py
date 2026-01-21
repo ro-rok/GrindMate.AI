@@ -10,6 +10,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from .config import get_settings
 from .db import get_database
 from .models.user import UserInDB
+from .services.auth_service import create_access_token as create_access_token_service
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -31,12 +32,8 @@ def hash_password(password: str) -> str:
 
 
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
-    settings = get_settings()
-    if expires_delta is None:
-        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
-    expire = datetime.now(timezone.utc) + expires_delta
-    to_encode = {"sub": subject, "exp": expire}
-    return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
+    """Legacy wrapper for backward compatibility"""
+    return create_access_token_service(subject, expires_delta)
 
 
 async def get_current_user(
@@ -51,8 +48,15 @@ async def get_current_user(
     try:
         payload = jwt.decode(session, settings.secret_key, algorithms=["HS256"])
         user_id = payload.get("sub")
+        token_type = payload.get("type")
+        
         if user_id is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        
+        # Ensure this is an access token, not a refresh token
+        if token_type != "access":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+            
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
 

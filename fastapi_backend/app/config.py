@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     # Auth / security
     secret_key: str = os.getenv("SECRET_KEY", "change-me-in-production")
     access_token_cookie_name: str = "session"
-    access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    refresh_token_cookie_name: str = "refresh_token"
+    csrf_token_cookie_name: str = "csrf_token"
+    access_token_expire_minutes: int = 15  # 15 minutes (short-lived)
+    refresh_token_expire_days: int = 7  # 7 days sliding window
 
     # CORS
     backend_base_url: str = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")

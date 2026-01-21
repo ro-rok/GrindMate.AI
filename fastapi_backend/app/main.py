@@ -12,6 +12,7 @@ from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
 from .routers import auth, companies, ping, questions, questions_standalone, users, chats
 from .init_db import create_indexes
+from .middleware import CSRFMiddleware
 
 
 @asynccontextmanager
@@ -46,6 +47,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # CSRF Protection Middleware
+    app.add_middleware(CSRFMiddleware)
 
     # Routers
     app.include_router(ping.router)

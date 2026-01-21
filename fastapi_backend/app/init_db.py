@@ -197,6 +197,46 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     )
     logger.info("✓ Created TTL index on rate_limits (expires_at)")
     
+    # ============================================================================
+    # REFRESH_TOKENS COLLECTION INDEXES
+    # ============================================================================
+    
+    # Index on token_hash for fast token lookup
+    await db.refresh_tokens.create_index(
+        [("token_hash", ASCENDING)],
+        name="idx_refresh_tokens_token_hash",
+        background=True
+    )
+    logger.info("✓ Created index on refresh_tokens (token_hash)")
+    
+    # Index on token_family_id for revoking token families
+    await db.refresh_tokens.create_index(
+        [("token_family_id", ASCENDING)],
+        name="idx_refresh_tokens_family_id",
+        background=True
+    )
+    logger.info("✓ Created index on refresh_tokens (token_family_id)")
+    
+    # Compound index for user's active tokens
+    await db.refresh_tokens.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("revoked", ASCENDING)
+        ],
+        name="idx_refresh_tokens_user_revoked",
+        background=True
+    )
+    logger.info("✓ Created compound index on refresh_tokens (user_id, revoked)")
+    
+    # TTL index for automatic cleanup of expired tokens
+    await db.refresh_tokens.create_index(
+        [("expires_at", ASCENDING)],
+        name="idx_refresh_tokens_ttl",
+        expireAfterSeconds=0,
+        background=True
+    )
+    logger.info("✓ Created TTL index on refresh_tokens (expires_at)")
+    
     logger.info("✅ All MongoDB indexes created successfully")
 
 
@@ -212,7 +252,8 @@ async def list_indexes(db: AsyncIOMotorDatabase) -> dict:
         "users",
         "chat_messages",
         "hint_unlocks",
-        "rate_limits"
+        "rate_limits",
+        "refresh_tokens"
     ]
     
     indexes = {}
