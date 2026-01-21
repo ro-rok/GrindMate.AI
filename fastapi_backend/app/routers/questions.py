@@ -370,6 +370,27 @@ async def solve_question(
     body: dict,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    """
+    Mark a question as solved.
+    
+    Accepts:
+        - user_id: Required user identifier
+        - time_spent_seconds: Optional time spent on the question (default: 0)
+    
+    Returns:
+        - solved: Boolean confirmation
+        - question_id: The question ID
+        - streak_updated: Whether the streak was updated
+        - new_streak: Current streak count
+        - milestone_reached: Milestone if reached (7, 30, or 100), otherwise null
+    
+    Side effects:
+        - Updates user_questions record (solved status, attempts, time_spent)
+        - Updates user streak (current_streak, longest_streak, last_solve_date)
+        - Weak topics are recalculated on-demand via analytics endpoint
+    
+    Requirements: 9.1-9.7, 10.1-10.7, 11.1-11.7
+    """
     user_id = body.get("user_id")
     time_spent_seconds = body.get("time_spent_seconds", 0)
     
@@ -416,7 +437,7 @@ async def solve_question(
     # Increment attempts counter (Requirement 11.1)
     inc_doc = {"attempts": 1}
     
-    # Add time_spent_seconds if provided
+    # Add time_spent_seconds if provided (Requirement 9.1)
     if time_spent_seconds > 0:
         if existing and "time_spent_seconds" in existing:
             set_doc["time_spent_seconds"] = existing["time_spent_seconds"] + time_spent_seconds
@@ -450,13 +471,17 @@ async def solve_question(
         upsert=True,
     )
     
-    # Update streak
+    # Update streak (Requirements 10.1-10.7)
     streak_service = StreakService(db)
     user_timezone = user_doc.get("timezone", "UTC")
     streak_info = await streak_service.update_streak_on_solve(
         user_id=user_obj_id,
         timezone=user_timezone
     )
+
+    # Note: Weak topics are recalculated on-demand via the analytics endpoint
+    # (Requirements 11.1-11.7). The updated solve status will be reflected
+    # in the next analytics request.
 
     return {
         "solved": True,
@@ -474,6 +499,25 @@ async def unsolve_question(
     body: dict,
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
+    """
+    Unmark a question as solved.
+    
+    Accepts:
+        - user_id: Required user identifier
+    
+    Returns:
+        - solved: Boolean confirmation (false)
+        - question_id: The question ID
+        - streak_updated: Whether the streak was recalculated
+        - new_streak: Current streak count after recalculation
+    
+    Side effects:
+        - Updates user_questions record (solved status set to false, attempts incremented)
+        - Recalculates user streak based on remaining solved questions
+        - Weak topics are recalculated on-demand via analytics endpoint
+    
+    Requirements: 9.1-9.7, 10.1-10.7, 11.1-11.7
+    """
     user_id = body.get("user_id")
     if not user_id:
         raise HTTPException(
@@ -505,15 +549,26 @@ async def unsolve_question(
     if result.matched_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     
-    # Update streak after unsolving
+    # Update streak after unsolving (Requirements 10.1-10.7)
     user_doc = await db["users"].find_one({"_id": user_obj_id}, {"timezone": 1})
     if user_doc:
         streak_service = StreakService(db)
         user_timezone = user_doc.get("timezone", "UTC")
-        await streak_service.update_streak_on_unsolve(
+        streak_info = await streak_service.update_streak_on_unsolve(
             user_id=user_obj_id,
             timezone=user_timezone
         )
+        
+        # Note: Weak topics are recalculated on-demand via the analytics endpoint
+        # (Requirements 11.1-11.7). The updated solve status will be reflected
+        # in the next analytics request.
+        
+        return {
+            "solved": False,
+            "question_id": question_id,
+            "streak_updated": streak_info["streak_updated"],
+            "new_streak": streak_info["new_streak"]
+        }
 
     return {"solved": False, "question_id": question_id}
 
