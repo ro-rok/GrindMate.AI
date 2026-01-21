@@ -25,7 +25,8 @@ const Button = forwardRef(({
     primary: 'bg-accent-primary text-white hover:bg-accent-primary-hover focus:ring-accent-primary',
     secondary: 'bg-black-elevated text-text-primary hover:bg-black-elevated-hover border border-border-subtle focus:ring-accent-primary',
     ghost: 'text-text-primary hover:bg-black-elevated focus:ring-accent-primary',
-    danger: 'bg-accent-danger text-white hover:bg-red-600 focus:ring-accent-danger'
+    danger: 'bg-accent-danger text-white hover:bg-red-600 focus:ring-accent-danger',
+    success: 'bg-accent-success text-white hover:bg-green-600 focus:ring-accent-success'
   };
 
   const sizeStyles = {
