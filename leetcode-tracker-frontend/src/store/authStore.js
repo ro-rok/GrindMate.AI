@@ -52,7 +52,12 @@ const useAuthStore = create(
 
           return data;
         } catch (error) {
-          set({ error: error.message, isLoading: false });
+          set({ 
+            user: null,
+            isAuthenticated: false,
+            error: error.message, 
+            isLoading: false 
+          });
           throw error;
         }
       },
@@ -159,6 +164,54 @@ const useAuthStore = create(
       },
 
       clearError: () => set({ error: null }),
+
+      // Validate session on app load
+      validateSession: async () => {
+        const state = get();
+        
+        // If not authenticated in state, nothing to validate
+        if (!state.isAuthenticated) {
+          return false;
+        }
+        
+        try {
+          // Try to refresh the token to validate session
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            
+            // Update CSRF token if provided
+            if (data.csrf_token) {
+              localStorage.setItem('csrf_token', data.csrf_token);
+            }
+            
+            // Session is valid
+            return true;
+          } else {
+            // Session is invalid, logout
+            set({
+              user: null,
+              isAuthenticated: false,
+              error: null,
+            });
+            localStorage.removeItem('csrf_token');
+            return false;
+          }
+        } catch (error) {
+          // Network error or session invalid
+          set({
+            user: null,
+            isAuthenticated: false,
+            error: null,
+          });
+          localStorage.removeItem('csrf_token');
+          return false;
+        }
+      },
     }),
     {
       name: 'auth-storage',

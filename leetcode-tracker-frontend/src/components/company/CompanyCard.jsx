@@ -6,12 +6,12 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 /**
  * CompanyCard component with premium styling
- * Displays company information with hover effects and animations
+ * Displays company information with hover effects, animations, and favorite button
  * Accessible with keyboard navigation and ARIA labels
  * 
  * Requirements: 3.3, 3.5, 3.7, 7.6, 7.7
  */
-const CompanyCard = ({ company, onClick, index = 0 }) => {
+const CompanyCard = ({ company, onClick, index = 0, isFavorite = false, onToggleFavorite }) => {
   const prefersReducedMotion = useReducedMotion();
 
   const MotionDiv = prefersReducedMotion ? 'div' : motion.div;
@@ -61,6 +61,17 @@ const CompanyCard = ({ company, onClick, index = 0 }) => {
         {/* Background gradient effect */}
         <div className="absolute inset-0 bg-gradient-to-br from-accent-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden="true" />
 
+        {/* Favorite button */}
+        {onToggleFavorite && (
+          <button
+            onClick={onToggleFavorite}
+            className="absolute top-4 right-4 z-20 text-2xl transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-black-elevated rounded"
+            aria-label={isFavorite ? `Remove ${company.name} from favorites` : `Add ${company.name} to favorites`}
+          >
+            {isFavorite ? '⭐' : '☆'}
+          </button>
+        )}
+
         {/* Content */}
         <div className="relative z-10">
           {/* Company icon and name */}
@@ -69,7 +80,7 @@ const CompanyCard = ({ company, onClick, index = 0 }) => {
               <div className="w-12 h-12 rounded-lg bg-black-elevated-hover border border-border-subtle flex items-center justify-center group-hover:border-accent-primary/50 transition-colors" aria-hidden="true">
                 <FaBuilding className="text-accent-primary text-xl" />
               </div>
-              <div>
+              <div className="pr-8">
                 <h3 className="text-lg font-semibold text-text-primary group-hover:text-accent-primary transition-colors">
                   {company.name}
                 </h3>

@@ -24,6 +24,12 @@ async def refresh_company_questions(company_id: str):
     """
     Port of GithubCsvImporter.refresh_company! for a single company.
     Uses MongoDB only - no SQL dependencies.
+    
+    This function:
+    1. Fetches CSV files from GitHub for each timeframe
+    2. Updates existing questions or inserts new ones
+    3. Does NOT delete any questions - only marks them as removed if they're no longer in CSV
+    4. Preserves user progress and solve history
     """
     db: AsyncIOMotorDatabase = get_database()
     company = await db["companies"].find_one({"_id": ObjectId(company_id)})
@@ -34,14 +40,9 @@ async def refresh_company_questions(company_id: str):
     company_name = company.get("name", "")
     print(f"[Importer] 🚀 Starting import for {company_name}")
 
-    # Get all existing question links for this company
-    old_links = [
-        doc["link"]
-        async for doc in db["questions"].find(
-            {"company_id": company["_id"]}, {"link": 1}
-        )
-    ]
-    new_links: list[str] = []
+    # Track all question links found in this import (per timeframe)
+    # Key: timeframe, Value: set of links
+    new_links_by_timeframe: dict[str, set[str]] = {}
     now = datetime.utcnow()
 
     async with httpx.AsyncClient(timeout=60.0) as client:
@@ -50,6 +51,8 @@ async def refresh_company_questions(company_id: str):
             file_name = urllib.parse.quote(fname, safe="")
             url = f"{RAW_BASE}/{folder}/{file_name}"
             print(f"[Importer] 📥 Fetching {timeframe} → {url}")
+
+            new_links_by_timeframe[timeframe] = set()
 
             try:
                 resp = await client.get(url, timeout=60.0)
@@ -73,10 +76,10 @@ async def refresh_company_questions(company_id: str):
                 if not link:
                     continue
                 
-                new_links.append(link)
+                new_links_by_timeframe[timeframe].add(link)
                 print(f"[Importer]   ➡️  Row: {title}")
 
-                # Check if question already exists
+                # Check if question already exists for this company and timeframe
                 existing = await db["questions"].find_one(
                     {
                         "link": link,
@@ -112,15 +115,19 @@ async def refresh_company_questions(company_id: str):
                 }
 
                 if existing:
-                    # Update existing question - preserve legacy_id and company_legacy_id if they exist
-                    # Don't overwrite legacy fields that were set during SQLite migration
-                    update_doc["updated_at"] = now
-                    # Preserve legacy_id if it exists
+                    # Update existing question
+                    # Preserve legacy_id and company_legacy_id if they exist
                     if "legacy_id" in existing:
                         update_doc["legacy_id"] = existing["legacy_id"]
-                    # Preserve company_legacy_id if it exists
                     if "company_legacy_id" in existing:
                         update_doc["company_legacy_id"] = existing["company_legacy_id"]
+                    
+                    # Clear removed flag if it was previously marked as removed
+                    if existing.get("metadata", {}).get("removed_on"):
+                        update_doc["metadata"] = {
+                            k: v for k, v in existing.get("metadata", {}).items()
+                            if k != "removed_on"
+                        }
                     
                     await db["questions"].update_one(
                         {"_id": existing["_id"]},
@@ -128,32 +135,41 @@ async def refresh_company_questions(company_id: str):
                     )
                     print(f"[Importer]      ✔️  Updated Q#{existing['_id']}")
                 else:
-                    # Insert new question - no legacy_id needed (not from SQLite migration)
-                    # But preserve company_legacy_id if company has it
+                    # Insert new question
                     if "legacy_id" in company:
                         update_doc["company_legacy_id"] = company["legacy_id"]
                     update_doc["created_at"] = now
                     result = await db["questions"].insert_one(update_doc)
                     print(f"[Importer]      ✔️  Saved Q#{result.inserted_id}")
 
-    # Mark removed questions (questions that were in old_links but not in new_links)
-    removed = set(old_links) - set(new_links)
-    if removed:
-        print(f"[Importer] 🗑️  Marking {len(removed)} removed questions")
-        for link in removed:
-            q = await db["questions"].find_one(
-                {"company_id": company["_id"], "link": link}
-            )
-            if q:
+    # Mark questions as removed if they're no longer in the CSV for their timeframe
+    # This preserves the questions and user progress, just marks them as removed
+    for timeframe, new_links in new_links_by_timeframe.items():
+        if not new_links:
+            continue
+            
+        # Get all existing questions for this company and timeframe
+        existing_questions = db["questions"].find(
+            {
+                "company_id": company["_id"],
+                "timeframe": timeframe
+            }
+        )
+        
+        async for q in existing_questions:
+            link = q.get("link")
+            if link and link not in new_links:
+                # Question is no longer in CSV - mark as removed
                 metadata = q.get("metadata") or {}
                 if "removed_on" not in metadata:
                     metadata["removed_on"] = datetime.utcnow().date().isoformat()
-                await db["questions"].update_one(
-                    {"_id": q["_id"]},
-                    {"$set": {"metadata": metadata}},
-                )
-                print(f"[Importer]      🗑️  Marked removed {link}")
+                    await db["questions"].update_one(
+                        {"_id": q["_id"]},
+                        {"$set": {"metadata": metadata}},
+                    )
+                    print(f"[Importer]      🗑️  Marked removed: {q.get('title')} ({timeframe})")
 
     print(f"[Importer] ✅ Done importing for {company_name}")
+
 
 

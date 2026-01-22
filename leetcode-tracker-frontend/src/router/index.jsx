@@ -82,9 +82,7 @@ const router = createBrowserRouter([
         path: '/companies/:companyId',
         element: (
           <SuspenseLayout>
-            <ProtectedRoute>
-              <QuestionList />
-            </ProtectedRoute>
+            <QuestionList />
           </SuspenseLayout>
         ),
       },
@@ -92,9 +90,7 @@ const router = createBrowserRouter([
         path: '/companies/:companyId/random',
         element: (
           <SuspenseLayout>
-            <ProtectedRoute>
-              <Navigate to="/companies/:companyId" replace />
-            </ProtectedRoute>
+            <Navigate to="/companies/:companyId" replace />
           </SuspenseLayout>
         ),
       },
@@ -102,9 +98,7 @@ const router = createBrowserRouter([
         path: '/focus/:questionId',
         element: (
           <SuspenseLayout>
-            <ProtectedRoute>
-              <FocusMode />
-            </ProtectedRoute>
+            <FocusMode />
           </SuspenseLayout>
         ),
       },

@@ -9,13 +9,22 @@ const api = axios.create({
   }
 });
 
+// Helper function to get cookie value
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+  return null;
+}
+
 // Add request interceptor to include CSRF token
 api.interceptors.request.use(
   config => {
     // Add CSRF token to state-changing requests
     const protectedMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
     if (protectedMethods.includes(config.method?.toUpperCase())) {
-      const csrfToken = localStorage.getItem('csrf_token');
+      // Try to get CSRF token from cookie first, then fall back to localStorage
+      const csrfToken = getCookie('csrf_token') || localStorage.getItem('csrf_token');
       if (csrfToken) {
         config.headers['X-CSRF-Token'] = csrfToken;
       }
@@ -45,13 +54,64 @@ api.interceptors.response.use(
     }
     return response;
   }, 
-  error => {
-    // Don't log auth errors to console
+  async error => {
+    const originalRequest = error.config;
+    
+    // Handle 401 errors - session expired or invalid
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      // Try to refresh the token
+      try {
+        const response = await axios.post(
+          `${import.meta.env.VITE_API_URL}/auth/refresh`,
+          {},
+          {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            }
+          }
+        );
+        
+        if (response.status === 200) {
+          // Token refreshed successfully, retry the original request
+          return api(originalRequest);
+        }
+      } catch (refreshError) {
+        // Refresh failed - clear auth state
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('csrf_token');
+        
+        // Update auth store to reflect logged out state
+        import('./store/authStore').then(module => {
+          const useAuthStore = module.default;
+          const currentState = useAuthStore.getState();
+          if (currentState.isAuthenticated) {
+            currentState.setUser(null);
+          }
+        });
+        
+        return Promise.reject(refreshError);
+      }
+    }
+    
+    // For other 401 errors or if refresh failed, clear auth state
     if (error.response?.status === 401) {
-      // Clear stored user and CSRF token on auth errors
       localStorage.removeItem('currentUser');
       localStorage.removeItem('csrf_token');
+      
+      // Update auth store to reflect logged out state
+      import('./store/authStore').then(module => {
+        const useAuthStore = module.default;
+        const currentState = useAuthStore.getState();
+        if (currentState.isAuthenticated) {
+          currentState.setUser(null);
+        }
+      });
     }
+    
     return Promise.reject(error);
   }
 );

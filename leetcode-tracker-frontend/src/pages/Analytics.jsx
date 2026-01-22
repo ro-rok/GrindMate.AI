@@ -37,7 +37,7 @@ function Analytics() {
     if (isAuthenticated) {
       fetchAnalytics();
     } else {
-      // Show demo data for anonymous users
+      // Show demo data for anonymous users immediately
       setAnalytics(getDemoAnalytics());
       setStreak(getDemoStreak());
       setLoading(false);
@@ -218,4 +218,20 @@ function generateDemoHeatmap() {
     let count = 0;
     if (i < 5) {
       // Recent days have higher activity
-      count = Math.floor(Math.r
+      count = Math.floor(Math.random() * 4);
+    } else if (i < 15) {
+      count = Math.floor(Math.random() * 3);
+    } else {
+      count = Math.floor(Math.random() * 2);
+    }
+    
+    days.push({
+      date: date.toISOString().split('T')[0],
+      count: count,
+    });
+  }
+  
+  return days;
+}
+
+export default Analytics;

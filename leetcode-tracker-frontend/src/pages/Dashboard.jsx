@@ -51,14 +51,21 @@ function Dashboard() {
         setStreak(streakRes.data);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
-        showToast('Failed to load dashboard data', 'error');
+        
+        // If we get a 401, the session is invalid - redirect to login
+        if (error.response?.status === 401) {
+          useAuthStore.getState().setUser(null);
+          navigate('/login');
+        } else {
+          showToast('Failed to load dashboard data', 'error');
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [showToast]);
+  }, [showToast, navigate]);
 
   // GSAP scroll animations
   useEffect(() => {
@@ -111,11 +118,29 @@ function Dashboard() {
   // Handle random question
   const handleRandomQuestion = async () => {
     try {
-      // For now, navigate to companies page
-      // In future, this will use smart random endpoint
-      navigate('/companies');
+      // Get a random company from favorites or all companies
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/companies`, {
+        credentials: 'include',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch companies');
+      }
+      
+      const companies = await response.json();
+      
+      if (companies.length === 0) {
+        showToast('No companies available', 'error');
+        return;
+      }
+      
+      // Pick a random company
+      const randomCompany = companies[Math.floor(Math.random() * companies.length)];
+      
+      // Navigate to that company's questions page
+      navigate(`/companies/${randomCompany.id || randomCompany._id}`);
     } catch (error) {
-      console.error('Failed to get random question:', error);
+      console.error('Failed to get random company:', error);
       showToast('Failed to get random question', 'error');
     }
   };

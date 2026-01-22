@@ -142,7 +142,15 @@ async def validate_refresh_token(
     refresh_token = RefreshToken(**doc, id=doc["_id"])
     
     # Check if token is expired
-    if refresh_token.expires_at < datetime.now(timezone.utc):
+    # Handle both timezone-aware and timezone-naive datetimes
+    now_utc = datetime.now(timezone.utc)
+    expires_at = refresh_token.expires_at
+    
+    # If expires_at is naive, make it aware (assume UTC)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    if expires_at < now_utc:
         return None, "Token expired"
     
     # Check if token is revoked (reuse attack detection)
