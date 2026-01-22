@@ -7,6 +7,7 @@ import useQuestionStore from '../store/questionStore';
 import useAuthStore from '../store/authStore';
 import QuestionFilters from '../components/question/QuestionFilters';
 import QuestionCard from '../components/question/QuestionCard';
+import QuestionActionModal from '../components/question/QuestionActionModal';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import LoaderTerminal from '../components/LoaderTerminal';
@@ -41,6 +42,7 @@ function QuestionList() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPopulating, setIsPopulating] = useState(false);
   const [error, setError] = useState(null);
+  const [actionModalQuestion, setActionModalQuestion] = useState(null);
 
   // Fetch company details
   useEffect(() => {
@@ -249,11 +251,33 @@ function QuestionList() {
     // Open LeetCode link
     window.open(question.link, '_blank');
     
-    // Show solve modal (you can implement a modal here)
-    // For now, just mark as solved after a delay
-    setTimeout(() => {
-      handleMarkSolved(question.id, true);
-    }, 1000);
+    // Show action modal to ask what user wants to do
+    setActionModalQuestion(question);
+  };
+
+  // Handle action from modal
+  const handleQuestionAction = async (action) => {
+    if (!actionModalQuestion) return;
+
+    switch (action) {
+      case 'solved':
+        await handleMarkSolved(actionModalQuestion.id, true);
+        break;
+      
+      case 'stuck':
+        // Navigate to focus mode with AI tutor
+        navigate(`/focus/${actionModalQuestion.id}`);
+        break;
+      
+      case 'unsolve':
+        await handleMarkSolved(actionModalQuestion.id, false);
+        break;
+      
+      case 'opened':
+      default:
+        // Just close the modal, no action
+        break;
+    }
   };
 
   // Handle mark solved/unsolved
@@ -345,6 +369,14 @@ function QuestionList() {
 
   return (
     <div className="min-h-screen bg-black-base">
+      {/* Question Action Modal */}
+      <QuestionActionModal
+        question={actionModalQuestion}
+        isOpen={!!actionModalQuestion}
+        onClose={() => setActionModalQuestion(null)}
+        onAction={handleQuestionAction}
+      />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <motion.div

@@ -49,6 +49,7 @@ class RateBudgetResponse(BaseModel):
     tokens_remaining: int
     requests_remaining: int
     reset_at: Optional[datetime]
+    byok_enabled: bool = False
 
 
 class BYOKRequest(BaseModel):
@@ -61,6 +62,12 @@ class BYOKResponse(BaseModel):
     success: bool
     message: str
     byok_enabled: bool
+
+
+class UserUpdateRequest(BaseModel):
+    """Request model for updating user settings"""
+    timezone: Optional[str] = None
+    preferences: Optional[Dict[str, Any]] = None
 
 
 class StreakInfo(BaseModel):
@@ -230,7 +237,8 @@ async def get_user_analytics(
         rate_budget=RateBudgetResponse(
             tokens_remaining=current_user.rate_budget_tokens,
             requests_remaining=current_user.rate_budget_requests,
-            reset_at=current_user.rate_budget_reset_at
+            reset_at=current_user.rate_budget_reset_at,
+            byok_enabled=bool(current_user.byok_groq_key) if hasattr(current_user, 'byok_groq_key') else False
         )
     )
 
@@ -331,3 +339,88 @@ async def get_byok_status(
         message="BYOK enabled" if byok_enabled else "BYOK not enabled",
         byok_enabled=byok_enabled
     )
+
+
+@router.patch("/users/me")
+async def update_user_settings(
+    request: UserUpdateRequest,
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Update user settings (timezone, preferences).
+    
+    Args:
+        request: Contains optional timezone and preferences
+        
+    Returns:
+        Updated user data
+    """
+    update_data = {}
+    
+    if request.timezone is not None:
+        update_data["timezone"] = request.timezone
+    
+    if request.preferences is not None:
+        update_data["preferences"] = request.preferences
+    
+    if not update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No update data provided"
+        )
+    
+    # Update user document
+    result = await db["users"].update_one(
+        {"_id": ObjectId(current_user.id)},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found or no changes made"
+        )
+    
+    # Fetch updated user
+    updated_user = await db["users"].find_one({"_id": ObjectId(current_user.id)})
+    
+    # Remove sensitive data
+    if updated_user:
+        updated_user.pop("encrypted_password", None)
+        updated_user.pop("byok_groq_key", None)
+        updated_user["id"] = str(updated_user.pop("_id"))
+    
+    return updated_user
+
+
+@router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_account(
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Delete user account and all associated data.
+    
+    This will permanently delete:
+    - User document
+    - All user_questions (solved status)
+    - Any other user-related data
+    
+    This action cannot be undone.
+    """
+    user_obj_id = ObjectId(current_user.id)
+    
+    # Delete all user_questions
+    await db["user_questions"].delete_many({"user_id": user_obj_id})
+    
+    # Delete user document
+    result = await db["users"].delete_one({"_id": user_obj_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return

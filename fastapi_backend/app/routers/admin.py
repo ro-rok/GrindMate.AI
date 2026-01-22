@@ -75,6 +75,14 @@ class ImportRequest(BaseModel):
     source: str = Field(default="leetcode_favorites", description="Source identifier")
 
 
+class CompanyImportRequest(BaseModel):
+    """Request body for company-specific GraphQL import"""
+    raw: str = Field(..., description="Raw GraphQL dump text")
+    company_id: str = Field(..., description="Company ID to associate questions with")
+    timeframe: str = Field(..., description="Timeframe (30_days, 60_days, 90_days, more_than_six_months, all_time)")
+    exclude_solved: bool = Field(default=False, description="Exclude questions with status SOLVED (default: False - includes all)")
+
+
 class PreviewResponse(BaseModel):
     """Response for import preview"""
     counts: Dict[str, int]
@@ -155,6 +163,11 @@ async def preview_graphql_import(
     audit_logger = AuditLoggerService(db)
     
     try:
+        # Debug: Log input characteristics
+        input_length = len(body.raw)
+        input_start = body.raw[:100] if len(body.raw) > 100 else body.raw
+        print(f"[DEBUG] Preview import - Input length: {input_length}, Start: {input_start}")
+        
         # Call preview_import
         preview_result = await importer.preview_import(
             raw_input=body.raw,
@@ -170,12 +183,17 @@ async def preview_graphql_import(
             metadata={
                 "list_name": body.list_name,
                 "source": body.source,
-                "counts": preview_result["counts"]
+                "counts": preview_result.counts
             },
             request=request
         )
         
-        return PreviewResponse(**preview_result)
+        return PreviewResponse(
+            counts=preview_result.counts,
+            duplicates=preview_result.duplicates,
+            sample=preview_result.sample,
+            errors=preview_result.errors
+        )
     
     except ValueError as e:
         # Parsing error - convert to ParsingError for proper handling
@@ -280,13 +298,17 @@ async def commit_graphql_import(
             metadata={
                 "list_name": body.list_name,
                 "source": body.source,
-                "counts": commit_result["counts"],
-                "import_id": commit_result["import_id"]
+                "counts": commit_result.counts,
+                "import_id": commit_result.import_id
             },
             request=request
         )
         
-        return CommitResponse(**commit_result)
+        return CommitResponse(
+            counts=commit_result.counts,
+            import_id=commit_result.import_id,
+            errors=commit_result.errors
+        )
     
     except ValueError as e:
         # Parsing error - convert to ParsingError for proper handling
@@ -342,6 +364,283 @@ async def commit_graphql_import(
         )
         
         # Re-raise to be caught by generic exception handler
+        raise
+
+
+@router.post("/import/graphql-dump/company-preview", response_model=PreviewResponse)
+async def preview_company_graphql_import(
+    request: Request,
+    body: CompanyImportRequest,
+    admin_user: AdminUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Preview company-specific GraphQL dump import without database changes.
+    
+    Similar to populate button but uses GraphQL data instead of CSV.
+    Includes ALL questions by default (SOLVED, TO_DO, ATTEMPTED).
+    Set exclude_solved=true to filter out SOLVED questions.
+    Associates questions with company_id and timeframe.
+    
+    Requirements: 14.1 (extended for company import)
+    """
+    # Check rate limit
+    if not check_import_rate_limit(admin_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Maximum 10 import requests per hour."
+        )
+    
+    # Validate company exists
+    try:
+        company_obj_id = ObjectId(body.company_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid company_id"
+        )
+    
+    company = await db["companies"].find_one({"_id": company_obj_id})
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    # Validate timeframe
+    valid_timeframes = ["30_days", "60_days", "90_days", "more_than_six_months", "all_time"]
+    if body.timeframe not in valid_timeframes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"
+        )
+    
+    # Initialize services
+    importer = ImporterService(db)
+    audit_logger = AuditLoggerService(db)
+    
+    try:
+        # Debug: Log input characteristics
+        input_length = len(body.raw)
+        input_start = body.raw[:100] if len(body.raw) > 100 else body.raw
+        print(f"[DEBUG] Company preview import - Input length: {input_length}, Start: {input_start}")
+        
+        # Call preview_import with company context
+        preview_result = await importer.preview_company_import(
+            raw_input=body.raw,
+            company_id=body.company_id,
+            timeframe=body.timeframe,
+            exclude_solved=body.exclude_solved
+        )
+        
+        # Log audit event
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_preview",
+            metadata={
+                "company_id": body.company_id,
+                "company_name": company.get("name"),
+                "timeframe": body.timeframe,
+                "exclude_solved": body.exclude_solved,
+                "counts": preview_result.counts
+            },
+            request=request
+        )
+        
+        return PreviewResponse(
+            counts=preview_result.counts,
+            duplicates=preview_result.duplicates,
+            sample=preview_result.sample,
+            errors=preview_result.errors
+        )
+    
+    except ValueError as e:
+        # Parsing error
+        error_msg = str(e)
+        
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_preview_error",
+            metadata={
+                "company_id": body.company_id,
+                "timeframe": body.timeframe,
+                "error": "Parsing failed"
+            },
+            request=request
+        )
+        
+        raise ParsingError(
+            message="Could not parse input",
+            hint=error_msg
+        )
+    
+    except PyMongoError as e:
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_preview_error",
+            metadata={
+                "company_id": body.company_id,
+                "timeframe": body.timeframe,
+                "error": "Database error"
+            },
+            request=request
+        )
+        
+        raise DatabaseError("Database operation failed")
+    
+    except Exception as e:
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_preview_error",
+            metadata={
+                "company_id": body.company_id,
+                "timeframe": body.timeframe,
+                "error": "Unexpected error"
+            },
+            request=request
+        )
+        
+        raise
+
+
+@router.post("/import/graphql-dump/company-commit", response_model=CommitResponse)
+async def commit_company_graphql_import(
+    request: Request,
+    body: CompanyImportRequest,
+    admin_user: AdminUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Commit company-specific GraphQL dump import with database upserts.
+    
+    Similar to populate button but uses GraphQL data instead of CSV.
+    Includes ALL questions by default (SOLVED, TO_DO, ATTEMPTED).
+    Set exclude_solved=true to filter out SOLVED questions.
+    Associates questions with company_id and timeframe.
+    
+    Requirements: 14.2 (extended for company import)
+    """
+    # Check rate limit
+    if not check_import_rate_limit(admin_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Maximum 10 import requests per hour."
+        )
+    
+    # Validate company exists
+    try:
+        company_obj_id = ObjectId(body.company_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid company_id"
+        )
+    
+    company = await db["companies"].find_one({"_id": company_obj_id})
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    # Validate timeframe
+    valid_timeframes = ["30_days", "60_days", "90_days", "more_than_six_months", "all_time"]
+    if body.timeframe not in valid_timeframes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"
+        )
+    
+    # Initialize services
+    importer = ImporterService(db)
+    audit_logger = AuditLoggerService(db)
+    
+    try:
+        # Call commit_import with company context
+        commit_result = await importer.commit_company_import(
+            raw_input=body.raw,
+            company_id=body.company_id,
+            timeframe=body.timeframe,
+            exclude_solved=body.exclude_solved,
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email
+        )
+        
+        # Log audit event
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_commit",
+            metadata={
+                "company_id": body.company_id,
+                "company_name": company.get("name"),
+                "timeframe": body.timeframe,
+                "exclude_solved": body.exclude_solved,
+                "counts": commit_result.counts,
+                "import_id": commit_result.import_id
+            },
+            request=request
+        )
+        
+        return CommitResponse(
+            counts=commit_result.counts,
+            import_id=commit_result.import_id,
+            errors=commit_result.errors
+        )
+    
+    except ValueError as e:
+        # Parsing error
+        error_msg = str(e)
+        
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_commit_error",
+            metadata={
+                "company_id": body.company_id,
+                "timeframe": body.timeframe,
+                "error": "Parsing failed"
+            },
+            request=request
+        )
+        
+        raise ParsingError(
+            message="Could not parse input",
+            hint=error_msg
+        )
+    
+    except PyMongoError as e:
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_commit_error",
+            metadata={
+                "company_id": body.company_id,
+                "timeframe": body.timeframe,
+                "error": "Database error"
+            },
+            request=request
+        )
+        
+        raise DatabaseError("Database operation failed")
+    
+    except Exception as e:
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="company_import_commit_error",
+            metadata={
+                "company_id": body.company_id,
+                "timeframe": body.timeframe,
+                "error": "Unexpected error"
+            },
+            request=request
+        )
+        
         raise
 
 
@@ -586,7 +885,6 @@ async def update_question(
         
         # Log audit event
         audit_logger = AuditLoggerService(db)
-        context = get_request_context(request)
         await audit_logger.log_action(
             actor_user_id=admin_user.id,
             actor_email=admin_user.email,
@@ -596,8 +894,7 @@ async def update_question(
                 "question_title": question.get("title"),
                 "changes": changes
             },
-            ip_address=context["ip_address"],
-            user_agent=context["user_agent"]
+            request=request
         )
         
         # Return updated question
@@ -668,7 +965,6 @@ async def mark_question_removed(
         
         # Log audit event
         audit_logger = AuditLoggerService(db)
-        context = get_request_context(request)
         await audit_logger.log_action(
             actor_user_id=admin_user.id,
             actor_email=admin_user.email,
@@ -677,8 +973,7 @@ async def mark_question_removed(
                 "question_id": question_id,
                 "question_title": question.get("title")
             },
-            ip_address=context["ip_address"],
-            user_agent=context["user_agent"]
+            request=request
         )
         
         # Return updated question
@@ -749,7 +1044,6 @@ async def unremove_question(
         
         # Log audit event
         audit_logger = AuditLoggerService(db)
-        context = get_request_context(request)
         await audit_logger.log_action(
             actor_user_id=admin_user.id,
             actor_email=admin_user.email,
@@ -758,8 +1052,7 @@ async def unremove_question(
                 "question_id": question_id,
                 "question_title": question.get("title")
             },
-            ip_address=context["ip_address"],
-            user_agent=context["user_agent"]
+            request=request
         )
         
         # Return updated question

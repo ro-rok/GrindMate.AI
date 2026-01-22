@@ -111,13 +111,24 @@ class ParserService:
                 )
             return ParseResult(success=True, questions=questions)
         
-        # All stages failed
+        # All stages failed - provide detailed error
+        excerpt = self._get_excerpt(raw_input, max_length=200)
+        
+        # Try to give a more specific hint based on the input
+        hint = "Paste the raw response JSON from the Network tab (Response), not the object preview"
+        
+        # Check if input looks like it might be truncated or has issues
+        if len(raw_input.strip()) < 50:
+            hint = "Input is too short. Make sure you copied the complete GraphQL response."
+        elif not raw_input.strip().startswith('{') and not raw_input.strip().startswith('['):
+            hint = "Input doesn't look like JSON. Make sure you're copying the raw JSON response, not formatted text."
+        
         return ParseResult(
             success=False,
             error="Could not parse input",
             parse_stage_failed="array_extract",
-            hint="Paste the raw response JSON from the Network tab (Response), not the object preview",
-            sanitized_excerpt=self._get_excerpt(raw_input)
+            hint=hint,
+            sanitized_excerpt=excerpt
         )
     
     def _stage1_json_parse(self, text: str) -> Optional[Dict[str, Any]]:

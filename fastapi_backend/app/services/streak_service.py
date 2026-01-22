@@ -96,7 +96,9 @@ class StreakService:
             raise ValueError(f"User {user_id} not found")
         
         current_date = self.get_user_local_date(timezone)
-        last_solve_date = user.get("last_solve_date")
+        last_solve_datetime = user.get("last_solve_date")
+        # Convert datetime to date for comparison
+        last_solve_date = last_solve_datetime.date() if last_solve_datetime else None
         current_streak = user.get("current_streak", 0)
         longest_streak = user.get("longest_streak", 0)
         
@@ -136,7 +138,7 @@ class StreakService:
                 "$set": {
                     "current_streak": new_streak,
                     "longest_streak": new_longest_streak,
-                    "last_solve_date": current_date,
+                    "last_solve_date": datetime.combine(current_date, datetime.min.time()),
                     "updated_at": datetime.utcnow()
                 }
             }
@@ -218,7 +220,7 @@ class StreakService:
             {
                 "$set": {
                     "current_streak": new_streak,
-                    "last_solve_date": last_solve_date,
+                    "last_solve_date": datetime.combine(last_solve_date, datetime.min.time()),
                     "updated_at": datetime.utcnow()
                 }
             }

@@ -436,6 +436,376 @@ class ImporterService:
             'frequency': question.frequency,
             'source': question.source
         }
+    
+    async def preview_company_import(
+        self,
+        raw_input: str,
+        company_id: str,
+        timeframe: str,
+        exclude_solved: bool = False
+    ) -> PreviewResponse:
+        """
+        Preview company-specific import without database changes.
+        
+        Similar to populate button but uses GraphQL data instead of CSV.
+        Includes ALL questions by default (SOLVED, TO_DO, ATTEMPTED).
+        Set exclude_solved=True to filter out SOLVED questions.
+        
+        Args:
+            raw_input: Raw GraphQL dump text
+            company_id: Company ID to associate questions with
+            timeframe: Timeframe (30_days, 60_days, etc.)
+            exclude_solved: Whether to exclude SOLVED questions (default: False)
+            
+        Returns:
+            PreviewResponse with counts, sample, duplicates, and errors
+            
+        Raises:
+            ValueError: If parsing fails
+        """
+        # Parse the input
+        parse_result = self.parser.parse(raw_input)
+        
+        if not parse_result.success:
+            raise ValueError(
+                f"{parse_result.error}. {parse_result.hint or ''}"
+            )
+        
+        # Filter out SOLVED questions if requested
+        questions = parse_result.questions
+        if exclude_solved:
+            questions = [q for q in questions if q.get('status') != 'SOLVED']
+        
+        # Normalize the questions
+        normalization_result = self.normalizer.normalize_batch(questions)
+        
+        # Check which questions exist in database for this company and timeframe
+        company_obj_id = ObjectId(company_id)
+        existing_map = await self._check_existing_company_questions(
+            normalization_result.valid,
+            company_obj_id,
+            timeframe
+        )
+        
+        # Calculate counts
+        would_create = 0
+        would_update = 0
+        would_skip = 0
+        
+        for question in normalization_result.valid:
+            key = f"{question.link}_{timeframe}"
+            if key in existing_map:
+                would_update += 1
+            else:
+                would_create += 1
+        
+        counts = {
+            'total': len(parse_result.questions),
+            'valid': len(normalization_result.valid),
+            'invalid': len(normalization_result.invalid),
+            'would_create': would_create,
+            'would_update': would_update,
+            'would_skip': would_skip,
+            'filtered_solved': len(parse_result.questions) - len(questions) if exclude_solved else 0
+        }
+        
+        # Prepare sample (first 10 questions)
+        sample = []
+        for q in normalization_result.valid[:10]:
+            # Convert topics array to comma-separated string like CSV import
+            topics_str = ', '.join([t.get('name', '') for t in q.topics]) if q.topics else ''
+            
+            sample.append({
+                'title': q.title,
+                'titleSlug': q.titleSlug,
+                'difficulty': q.difficulty,
+                'link': q.link,
+                'topics': topics_str,
+                'frequency': q.frequency,
+                'acRate': q.acRate
+            })
+        
+        # Collect duplicates (questions appearing multiple times in input)
+        duplicates = normalization_result.duplicates
+        
+        # Prepare errors
+        errors = [
+            {
+                'title': err.get('title', 'Unknown'),
+                'error': err.get('error', 'Validation failed')
+            }
+            for err in normalization_result.invalid
+        ]
+        
+        return PreviewResponse(
+            counts=counts,
+            duplicates=duplicates,
+            sample=sample,
+            errors=errors
+        )
+    
+    async def commit_company_import(
+        self,
+        raw_input: str,
+        company_id: str,
+        timeframe: str,
+        exclude_solved: bool,
+        actor_user_id: str,
+        actor_email: str
+    ) -> CommitResponse:
+        """
+        Commit company-specific import with database upserts.
+        
+        Similar to populate button but uses GraphQL data instead of CSV.
+        Includes ALL questions by default (SOLVED, TO_DO, ATTEMPTED).
+        Set exclude_solved=True to filter out SOLVED questions.
+        
+        Args:
+            raw_input: Raw GraphQL dump text
+            company_id: Company ID to associate questions with
+            timeframe: Timeframe (30_days, 60_days, etc.)
+            exclude_solved: Whether to exclude SOLVED questions (default: False)
+            actor_user_id: User ID performing the import
+            actor_email: Email of user performing the import
+            
+        Returns:
+            CommitResponse with counts, import_id, and errors
+            
+        Raises:
+            ValueError: If parsing fails
+        """
+        # Parse the input
+        parse_result = self.parser.parse(raw_input)
+        
+        if not parse_result.success:
+            raise ValueError(
+                f"{parse_result.error}. {parse_result.hint or ''}"
+            )
+        
+        # Filter out SOLVED questions if requested
+        questions = parse_result.questions
+        if exclude_solved:
+            questions = [q for q in questions if q.get('status') != 'SOLVED']
+        
+        # Normalize the questions
+        normalization_result = self.normalizer.normalize_batch(questions)
+        
+        # Upsert questions into database with company context
+        company_obj_id = ObjectId(company_id)
+        upsert_counts, question_ids = await self._upsert_company_questions(
+            normalization_result.valid,
+            company_obj_id,
+            timeframe
+        )
+        
+        # Compute payload hash
+        normalized_dicts = [self._question_to_dict(q) for q in normalization_result.valid]
+        payload_hash = self.sanitizer.compute_payload_hash(normalized_dicts)
+        
+        # Prepare counts
+        counts = {
+            'total': len(parse_result.questions),
+            'created': upsert_counts.created,
+            'updated': upsert_counts.updated,
+            'skipped': upsert_counts.skipped,
+            'invalid': len(normalization_result.invalid),
+            'filtered_solved': len(parse_result.questions) - len(questions) if exclude_solved else 0
+        }
+        
+        # Prepare errors
+        errors = [
+            {
+                'title': err.get('title', 'Unknown'),
+                'error': err.get('error', 'Validation failed')
+            }
+            for err in normalization_result.invalid
+        ]
+        
+        # Create import batch record
+        import_id = await self._create_company_import_batch(
+            company_id=company_id,
+            timeframe=timeframe,
+            exclude_solved=exclude_solved,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            payload_hash=payload_hash,
+            counts=counts,
+            question_ids=question_ids,
+            errors=errors
+        )
+        
+        return CommitResponse(
+            counts=counts,
+            import_id=str(import_id),
+            errors=errors
+        )
+    
+    async def _check_existing_company_questions(
+        self,
+        questions: List[NormalizedQuestion],
+        company_id: ObjectId,
+        timeframe: str
+    ) -> Dict[str, Any]:
+        """
+        Check which questions already exist for this company and timeframe.
+        
+        Args:
+            questions: List of normalized questions
+            company_id: Company ObjectId
+            timeframe: Timeframe string
+            
+        Returns:
+            Dict mapping "link_timeframe" to existing question document
+        """
+        links = [q.link for q in questions]
+        
+        cursor = self.db.questions.find({
+            'link': {'$in': links},
+            'company_id': company_id,
+            'timeframe': timeframe
+        })
+        
+        existing_map = {}
+        async for doc in cursor:
+            key = f"{doc['link']}_{timeframe}"
+            existing_map[key] = doc
+        
+        return existing_map
+    
+    async def _upsert_company_questions(
+        self,
+        questions: List[NormalizedQuestion],
+        company_id: ObjectId,
+        timeframe: str
+    ) -> tuple[UpsertCounts, List[ObjectId]]:
+        """
+        Upsert questions for a company and timeframe.
+        
+        Similar to refresh_csv logic but uses GraphQL data.
+        
+        Args:
+            questions: List of normalized questions
+            company_id: Company ObjectId
+            timeframe: Timeframe string
+            
+        Returns:
+            Tuple of (UpsertCounts, list of question ObjectIds)
+        """
+        created = 0
+        updated = 0
+        skipped = 0
+        question_ids = []
+        now = datetime.utcnow()
+        
+        # Fetch company to get legacy_id if it exists
+        company = await self.db.companies.find_one({'_id': company_id})
+        company_legacy_id = company.get('legacy_id') if company else None
+        
+        for question in questions:
+            # Check if question exists for this company and timeframe
+            existing = await self.db.questions.find_one({
+                'link': question.link,
+                'company_id': company_id,
+                'timeframe': timeframe
+            })
+            
+            # Convert topics array to comma-separated string like CSV import
+            topics_str = ', '.join([t.get('name', '') for t in question.topics]) if question.topics else ''
+            
+            update_doc = {
+                'title': question.title,
+                'titleSlug': question.titleSlug,
+                'link': question.link,
+                'difficulty': question.difficulty,
+                'frequency': question.frequency or 0,
+                'acceptance_rate': question.acRate or 0.0,
+                'topics': topics_str,  # Store as string like CSV import
+                'company_id': company_id,
+                'timeframe': timeframe,
+                'source': 'graphql_import',
+                'updated_at': now,
+            }
+            
+            # Add company_legacy_id if company has one
+            if company_legacy_id:
+                update_doc['company_legacy_id'] = company_legacy_id
+            
+            if existing:
+                # Update existing question
+                # Preserve legacy_id if it exists
+                if 'legacy_id' in existing:
+                    update_doc['legacy_id'] = existing['legacy_id']
+                if 'company_legacy_id' in existing:
+                    update_doc['company_legacy_id'] = existing['company_legacy_id']
+                
+                # Clear removed flag if it was previously marked as removed
+                if existing.get('metadata', {}).get('removed_on'):
+                    update_doc['metadata'] = {
+                        k: v for k, v in existing.get('metadata', {}).items()
+                        if k != 'removed_on'
+                    }
+                
+                await self.db.questions.update_one(
+                    {'_id': existing['_id']},
+                    {'$set': update_doc}
+                )
+                updated += 1
+                question_ids.append(existing['_id'])
+            else:
+                # Insert new question
+                update_doc['created_at'] = now
+                result = await self.db.questions.insert_one(update_doc)
+                created += 1
+                question_ids.append(result.inserted_id)
+        
+        return UpsertCounts(created=created, updated=updated, skipped=skipped), question_ids
+    
+    async def _create_company_import_batch(
+        self,
+        company_id: str,
+        timeframe: str,
+        exclude_solved: bool,
+        actor_user_id: str,
+        actor_email: str,
+        payload_hash: str,
+        counts: Dict[str, int],
+        question_ids: List[ObjectId],
+        errors: List[Dict[str, Any]]
+    ) -> ObjectId:
+        """
+        Create import batch record for company import.
+        
+        Args:
+            company_id: Company ID
+            timeframe: Timeframe string
+            exclude_solved: Whether SOLVED questions were excluded
+            actor_user_id: User ID performing import
+            actor_email: Email of user performing import
+            payload_hash: Hash of payload
+            counts: Import counts
+            question_ids: List of question ObjectIds
+            errors: List of errors
+            
+        Returns:
+            Import batch ObjectId
+        """
+        import_doc = {
+            'type': 'company_graphql',
+            'company_id': ObjectId(company_id),
+            'timeframe': timeframe,
+            'exclude_solved': exclude_solved,
+            'created_at': datetime.utcnow(),
+            'actor': actor_user_id,
+            'actor_email': actor_email,
+            'payload_hash': payload_hash,
+            'counts': counts,
+            'question_refs': question_ids,
+            'notes': None,
+            'errors': errors
+        }
+        
+        result = await self.db.imports.insert_one(import_doc)
+        return result.inserted_id
 
 
 # Singleton instance

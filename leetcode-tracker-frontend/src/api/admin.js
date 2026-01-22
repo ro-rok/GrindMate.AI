@@ -86,6 +86,54 @@ export async function commitGraphQLImport(raw, listName, source = 'leetcode_favo
 }
 
 /**
+ * Preview company-specific GraphQL dump import without database changes
+ * @param {string} raw - Raw GraphQL dump text
+ * @param {string} companyId - Company ID to associate questions with
+ * @param {string} timeframe - Timeframe (30_days, 60_days, 90_days, more_than_six_months, all_time)
+ * @param {boolean} excludeSolved - Whether to exclude SOLVED questions (default: false - includes all)
+ * @returns {Promise<Object>} Preview response with counts, sample, duplicates, errors
+ * 
+ * Requirement: 14.1 (extended for company import)
+ */
+export async function previewCompanyGraphQLImport(raw, companyId, timeframe, excludeSolved = false) {
+  try {
+    const response = await api.post('/api/admin/import/graphql-dump/company-preview', {
+      raw,
+      company_id: companyId,
+      timeframe,
+      exclude_solved: excludeSolved,
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return { success: false, error: handleError(error) };
+  }
+}
+
+/**
+ * Commit company-specific GraphQL dump import with database upserts
+ * @param {string} raw - Raw GraphQL dump text
+ * @param {string} companyId - Company ID to associate questions with
+ * @param {string} timeframe - Timeframe (30_days, 60_days, 90_days, more_than_six_months, all_time)
+ * @param {boolean} excludeSolved - Whether to exclude SOLVED questions (default: false - includes all)
+ * @returns {Promise<Object>} Commit response with counts, import_id, errors
+ * 
+ * Requirement: 14.2 (extended for company import)
+ */
+export async function commitCompanyGraphQLImport(raw, companyId, timeframe, excludeSolved = false) {
+  try {
+    const response = await api.post('/api/admin/import/graphql-dump/company-commit', {
+      raw,
+      company_id: companyId,
+      timeframe,
+      exclude_solved: excludeSolved,
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return { success: false, error: handleError(error) };
+  }
+}
+
+/**
  * Company Endpoints
  */
 
@@ -258,6 +306,8 @@ const adminApi = {
   // Import
   previewGraphQLImport,
   commitGraphQLImport,
+  previewCompanyGraphQLImport,
+  commitCompanyGraphQLImport,
   
   // Companies
   refreshCompany,

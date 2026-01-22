@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import useAdminCheck from '../hooks/useAdminCheck';
 import DashboardTab from '../components/admin/DashboardTab';
 import ImportTab from '../components/admin/ImportTab';
+import CompanyImportTab from '../components/admin/CompanyImportTab';
 import QuestionsTab from '../components/admin/QuestionsTab';
 import CompaniesTab from '../components/admin/CompaniesTab';
 import AuditLogsTab from '../components/admin/AuditLogsTab';
@@ -55,7 +56,8 @@ function AdminPortal() {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'import', label: 'Import', icon: '📥' },
-    { id: 'companies', label: 'Companies', icon: '🏢' },
+    { id: 'company-import', label: 'Company Import', icon: '🏢' },
+    { id: 'companies', label: 'Companies', icon: '🏭' },
     { id: 'questions', label: 'Questions', icon: '❓' },
     { id: 'logs', label: 'Logs', icon: '📋' },
   ];
@@ -67,6 +69,8 @@ function AdminPortal() {
         return <DashboardTab />;
       case 'import':
         return <ImportTab />;
+      case 'company-import':
+        return <CompanyImportTab />;
       case 'companies':
         return <CompaniesTab />;
       case 'questions':
