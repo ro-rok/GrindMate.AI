@@ -58,7 +58,7 @@ async def unlock_hint(
     question_id: str,
     level: int,
     request: HintUnlockRequest = Body(...),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
     db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
@@ -135,7 +135,7 @@ async def unlock_hint(
 async def chat_with_tutor(
     question_id: str,
     request: ChatRequest,
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
     db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
@@ -196,7 +196,7 @@ async def chat_with_tutor(
 )
 async def get_unlocked_hints(
     question_id: str,
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
     """
@@ -227,7 +227,7 @@ async def get_unlocked_hints(
     status_code=status.HTTP_200_OK
 )
 async def get_rate_budget(
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
