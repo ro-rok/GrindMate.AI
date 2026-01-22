@@ -632,7 +632,7 @@ Guidance for this level:
 _tutor_service: Optional[TutorService] = None
 
 
-def get_tutor_service(db: Optional[AsyncIOMotorDatabase] = None) -> TutorService:
+def get_tutor_service(db=None):
     """Get or create tutor service instance"""
     global _tutor_service
     if _tutor_service is None:

@@ -57,8 +57,8 @@ class RateBudgetResponse(BaseModel):
 async def unlock_hint(
     question_id: str,
     level: int,
-    request: HintUnlockRequest,
     current_user: CurrentUser,
+    request: HintUnlockRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
@@ -134,8 +134,8 @@ async def unlock_hint(
 )
 async def chat_with_tutor(
     question_id: str,
-    request: ChatRequest,
     current_user: CurrentUser,
+    request: ChatRequest,
     db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
@@ -252,7 +252,7 @@ async def get_rate_budget(
 
 
 # Helper functions
-async def _get_rate_budget(user_id: str, db: AsyncIOMotorDatabase) -> dict:
+async def _get_rate_budget(user_id: str, db) -> dict:
     """Get user's remaining rate budget"""
     from datetime import datetime, timedelta
     from bson import ObjectId

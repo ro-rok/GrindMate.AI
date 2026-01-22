@@ -12,7 +12,7 @@ def get_client() -> AsyncIOMotorClient:
     return _client
 
 
-def get_database() -> AsyncIOMotorDatabase:
+def get_database():
     settings = get_settings()
     client = get_client()
     return client[settings.mongodb_db]
