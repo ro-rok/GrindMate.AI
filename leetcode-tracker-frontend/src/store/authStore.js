@@ -24,7 +24,7 @@ const useAuthStore = create(
       login: async (email, password) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/users/sign_in.json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include', // Include cookies
@@ -37,8 +37,14 @@ const useAuthStore = create(
           }
 
           const data = await response.json();
+          
+          // Store CSRF token for future requests
+          if (data.csrf_token) {
+            localStorage.setItem('csrf_token', data.csrf_token);
+          }
+          
           set({
-            user: data.user,
+            user: data,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -54,7 +60,7 @@ const useAuthStore = create(
       register: async (email, password, timezone) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/register`, {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/users.json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -67,8 +73,14 @@ const useAuthStore = create(
           }
 
           const data = await response.json();
+          
+          // Store CSRF token for future requests
+          if (data.csrf_token) {
+            localStorage.setItem('csrf_token', data.csrf_token);
+          }
+          
           set({
-            user: data.user,
+            user: data,
             isAuthenticated: true,
             isLoading: false,
             error: null,
@@ -84,11 +96,17 @@ const useAuthStore = create(
       logout: async () => {
         set({ isLoading: true, error: null });
         try {
-          await fetch(`${import.meta.env.VITE_API_URL}/auth/logout`, {
-            method: 'POST',
+          await fetch(`${import.meta.env.VITE_API_URL}/users/sign_out.json`, {
+            method: 'DELETE',
             credentials: 'include',
+            headers: {
+              'X-CSRF-Token': localStorage.getItem('csrf_token') || '',
+            },
           });
 
+          // Clear CSRF token
+          localStorage.removeItem('csrf_token');
+          
           set({
             user: null,
             isAuthenticated: false,
@@ -115,6 +133,12 @@ const useAuthStore = create(
           }
 
           const data = await response.json();
+          
+          // Update CSRF token
+          if (data.csrf_token) {
+            localStorage.setItem('csrf_token', data.csrf_token);
+          }
+          
           // Update user data if included in response
           if (data.user) {
             set({ user: data.user });
