@@ -58,8 +58,8 @@ async def unlock_hint(
     question_id: str,
     level: int,
     request: HintUnlockRequest,
-    db: AsyncIOMotorDatabase = Depends(get_database),
     current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
     """
@@ -135,8 +135,8 @@ async def unlock_hint(
 async def chat_with_tutor(
     question_id: str,
     request: ChatRequest,
-    db: AsyncIOMotorDatabase = Depends(get_database),
     current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
     """
@@ -196,8 +196,8 @@ async def chat_with_tutor(
 )
 async def get_unlocked_hints(
     question_id: str,
-    tutor_service: TutorService = Depends(get_tutor_service),
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    tutor_service: TutorService = Depends(get_tutor_service)
 ):
     """
     Get list of unlocked hint levels for a question.
@@ -227,8 +227,8 @@ async def get_unlocked_hints(
     status_code=status.HTTP_200_OK
 )
 async def get_rate_budget(
-    db: AsyncIOMotorDatabase = Depends(get_database),
-    current_user: CurrentUser
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database)
 ):
     """
     Get user's current rate budget (tokens and requests remaining).
