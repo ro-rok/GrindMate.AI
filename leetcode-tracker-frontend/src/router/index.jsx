@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import LoaderTerminal from '../components/LoaderTerminal';
+import Layout, { SimpleLayout } from '../components/layout/Layout';
 
 // Lazy load page components for code splitting
 const Landing = lazy(() => import('../pages/Landing'));
@@ -23,95 +24,111 @@ function SuspenseLayout({ children }) {
 }
 
 /**
- * Router configuration with lazy loading and protected routes
+ * Router configuration with lazy loading, protected routes, and page transitions
+ * 
+ * Features:
+ * - Lazy loading for code splitting
+ * - Protected routes with authentication
+ * - Smooth page transitions with Framer Motion
+ * - Layout components with sidebar/header
+ * - Reduced motion support
  */
 const router = createBrowserRouter([
+  // Simple layout routes (no sidebar/header)
   {
-    path: '/',
-    element: (
-      <SuspenseLayout>
-        <Landing />
-      </SuspenseLayout>
-    ),
+    element: <SimpleLayout />,
+    children: [
+      {
+        path: '/',
+        element: (
+          <SuspenseLayout>
+            <Landing />
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/login',
+        element: (
+          <SuspenseLayout>
+            <Login />
+          </SuspenseLayout>
+        ),
+      },
+    ],
   },
+  // Main layout routes (with header, optional sidebar)
   {
-    path: '/login',
-    element: (
-      <SuspenseLayout>
-        <Login />
-      </SuspenseLayout>
-    ),
+    element: <Layout showHeader={true} showSidebar={false} />,
+    children: [
+      {
+        path: '/dashboard',
+        element: (
+          <SuspenseLayout>
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/companies',
+        element: (
+          <SuspenseLayout>
+            <CompanyList />
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/companies/:companyId',
+        element: (
+          <SuspenseLayout>
+            <ProtectedRoute>
+              <QuestionList />
+            </ProtectedRoute>
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/companies/:companyId/random',
+        element: (
+          <SuspenseLayout>
+            <ProtectedRoute>
+              <Navigate to="/companies/:companyId" replace />
+            </ProtectedRoute>
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/focus/:questionId',
+        element: (
+          <SuspenseLayout>
+            <ProtectedRoute>
+              <FocusMode />
+            </ProtectedRoute>
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/profile',
+        element: (
+          <SuspenseLayout>
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/analytics',
+        element: (
+          <SuspenseLayout>
+            <Analytics />
+          </SuspenseLayout>
+        ),
+      },
+    ],
   },
-  {
-    path: '/dashboard',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
-  {
-    path: '/companies',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <CompanyList />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
-  {
-    path: '/companies/:companyId',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <QuestionList />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
-  {
-    path: '/companies/:companyId/random',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <Navigate to="/companies/:companyId" replace />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
-  {
-    path: '/focus/:questionId',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <FocusMode />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
-  {
-    path: '/profile',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <Profile />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
-  {
-    path: '/analytics',
-    element: (
-      <SuspenseLayout>
-        <ProtectedRoute>
-          <Analytics />
-        </ProtectedRoute>
-      </SuspenseLayout>
-    ),
-  },
+  // Catch-all redirect
   {
     path: '*',
     element: <Navigate to="/" replace />,

@@ -7,9 +7,9 @@ Implements Requirements 10.1-10.7.
 
 from datetime import datetime, date, timedelta
 from typing import Optional, Tuple
-from zoneinfo import ZoneInfo
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from app.utils.timezone import get_user_timezone
 
 
 class StreakService:
@@ -29,7 +29,7 @@ class StreakService:
             Current date in user's timezone
         """
         try:
-            tz = ZoneInfo(timezone)
+            tz = get_user_timezone(timezone)
             return datetime.now(tz).date()
         except Exception:
             # Fallback to UTC if timezone is invalid
@@ -207,7 +207,7 @@ class StreakService:
         # Get the most recent solve date
         most_recent_solve = solved_questions[0]["solved_at"]
         try:
-            tz = ZoneInfo(timezone)
+            tz = get_user_timezone(timezone)
             last_solve_date = most_recent_solve.astimezone(tz).date()
         except Exception:
             last_solve_date = most_recent_solve.date()
@@ -250,9 +250,9 @@ class StreakService:
             return 0
         
         try:
-            tz = ZoneInfo(timezone)
+            tz = get_user_timezone(timezone)
         except Exception:
-            tz = ZoneInfo("UTC")
+            tz = get_user_timezone("UTC")
         
         # Convert all solve dates to user's timezone
         solve_dates = []
@@ -306,9 +306,9 @@ class StreakService:
             [{"date": "2025-01-22", "count": 3}, ...]
         """
         try:
-            tz = ZoneInfo(timezone)
+            tz = get_user_timezone(timezone)
         except Exception:
-            tz = ZoneInfo("UTC")
+            tz = get_user_timezone("UTC")
         
         current_date = datetime.now(tz).date()
         start_date = current_date - timedelta(days=days - 1)

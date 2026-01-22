@@ -58,14 +58,16 @@ def test_streak_calculation():
 
 def test_timezone_date():
     """Test timezone-aware date calculation"""
-    from zoneinfo import ZoneInfo
     from datetime import datetime
+    import sys
+    sys.path.insert(0, 'app')
+    from utils.timezone import get_user_timezone
     
     print("\nTesting timezone-aware date calculation...")
     
     def get_user_local_date(timezone):
         try:
-            tz = ZoneInfo(timezone)
+            tz = get_user_timezone(timezone)
             return datetime.now(tz).date()
         except Exception:
             return datetime.utcnow().date()

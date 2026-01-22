@@ -16,8 +16,8 @@ const Card = forwardRef(({
 }, ref) => {
   const prefersReducedMotion = useReducedMotion();
 
-  const baseStyles = 'bg-black-elevated rounded-lg border border-border-subtle';
-  const hoverStyles = hoverable ? 'transition-all duration-300' : '';
+  const baseStyles = 'bg-black-elevated rounded-lg border border-border-subtle shadow-md';
+  const hoverStyles = hoverable ? 'transition-all duration-300 hover:shadow-lg hover:border-border-emphasis' : '';
   const clickableStyles = onClick ? 'cursor-pointer' : '';
 
   const combinedClassName = `${baseStyles} ${hoverStyles} ${clickableStyles} ${className}`;

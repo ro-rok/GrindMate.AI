@@ -41,17 +41,13 @@ const Header = () => {
           {/* Logo */}
           <Link 
             to={isAuthenticated ? '/dashboard' : '/'}
-            className="flex items-center gap-2 text-xl font-bold text-text-primary hover:text-accent-primary transition-colors"
+            className="flex items-center gap-3 text-xl font-bold text-text-primary hover:text-accent-primary transition-colors group"
           >
-            <svg
-              className="w-8 h-8"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
+            <img 
+              src="/logo.webp" 
+              alt="GrindMate.AI Logo" 
+              className="w-8 h-8 object-contain group-hover:scale-110 transition-transform"
+            />
             <span>GrindMate.AI</span>
           </Link>
 

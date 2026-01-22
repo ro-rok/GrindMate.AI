@@ -36,7 +36,7 @@ function Landing() {
             GrindMate<span className="text-accent-primary">.AI</span>
           </h1>
           <p className="text-xl md:text-2xl text-text-secondary mb-8">
-            Your cinematic LeetCode study companion
+            Your premium LeetCode study companion
           </p>
         </motion.div>
 

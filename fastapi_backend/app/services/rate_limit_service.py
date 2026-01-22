@@ -7,13 +7,13 @@ Enforces daily limits (25k tokens, 30 requests) and bypasses for BYOK mode users
 
 from datetime import datetime, timedelta, date, time
 from typing import Dict, Any, Optional, Tuple
-from zoneinfo import ZoneInfo
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 
 from ..db import get_database
 from ..models.rate_limit import RateLimit
+from ..utils.timezone import get_user_timezone, get_utc_timezone
 
 
 class RateLimitService:
@@ -56,7 +56,7 @@ class RateLimitService:
             }
         
         # Get user's local date
-        user_tz = ZoneInfo(user_timezone)
+        user_tz = get_user_timezone(user_timezone)
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
@@ -104,7 +104,7 @@ class RateLimitService:
             Dict with updated remaining budget
         """
         # Get user's local date
-        user_tz = ZoneInfo(user_timezone)
+        user_tz = get_user_timezone(user_timezone)
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
@@ -171,7 +171,7 @@ class RateLimitService:
             }
         
         # Get user's local date
-        user_tz = ZoneInfo(user_timezone)
+        user_tz = get_user_timezone(user_timezone)
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
@@ -210,7 +210,7 @@ class RateLimitService:
             True if budget was reset, False otherwise
         """
         # Get user's local date
-        user_tz = ZoneInfo(user_timezone)
+        user_tz = get_user_timezone(user_timezone)
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
@@ -234,7 +234,7 @@ class RateLimitService:
         Returns:
             Datetime of next reset in UTC
         """
-        user_tz = ZoneInfo(user_timezone)
+        user_tz = get_user_timezone(user_timezone)
         now_local = datetime.now(user_tz)
         
         # Get tomorrow's date in user's timezone
@@ -244,7 +244,8 @@ class RateLimitService:
         midnight_local = datetime.combine(tomorrow_local, time.min, tzinfo=user_tz)
         
         # Convert to UTC for consistent storage/comparison
-        midnight_utc = midnight_local.astimezone(ZoneInfo("UTC"))
+        utc_tz = get_utc_timezone()
+        midnight_utc = midnight_local.astimezone(utc_tz)
         
         return midnight_utc
     

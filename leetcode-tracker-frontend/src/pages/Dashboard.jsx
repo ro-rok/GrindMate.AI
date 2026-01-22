@@ -135,17 +135,19 @@ function Dashboard() {
     <div className="min-h-screen bg-black-base">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero section */}
-        <div ref={heroRef} className="mb-12">
-          <h1 className="text-4xl font-bold text-text-primary mb-2">
-            Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}! 👋
-          </h1>
-          <p className="text-lg text-text-secondary">
-            Ready to crush some problems today?
-          </p>
+        <div ref={heroRef}>
+          <header>
+            <h1 className="text-4xl font-bold text-text-primary mb-2">
+              Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}! 👋
+            </h1>
+            <p className="text-lg text-text-secondary">
+              Ready to crush some problems today?
+            </p>
+          </header>
         </div>
 
         {/* Main content grid */}
-        <div ref={cardsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div ref={cardsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8" role="region" aria-label="Dashboard overview">
           {/* Streak card - spans 2 columns on large screens */}
           <div className="lg:col-span-2 dashboard-card">
             <StreakCard
@@ -162,29 +164,34 @@ function Dashboard() {
               <h3 className="text-lg font-semibold text-text-primary mb-4">
                 Quick Actions
               </h3>
-              <div className="space-y-3">
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  onClick={handleRandomQuestion}
-                >
-                  🎲 Random Question
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => navigate('/companies')}
-                >
-                  📚 Browse Companies
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => navigate('/analytics')}
-                >
-                  📊 View Analytics
-                </Button>
-              </div>
+              <nav aria-label="Quick actions">
+                <div className="space-y-3">
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    onClick={handleRandomQuestion}
+                    aria-label="Get a random question to solve"
+                  >
+                    🎲 Random Question
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => navigate('/companies')}
+                    aria-label="Browse companies and their questions"
+                  >
+                    📚 Browse Companies
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => navigate('/analytics')}
+                    aria-label="View your analytics and progress"
+                  >
+                    📊 View Analytics
+                  </Button>
+                </div>
+              </nav>
             </Card>
           </div>
         </div>
@@ -208,7 +215,7 @@ function Dashboard() {
               
               {/* Total solved */}
               <div className="mb-6">
-                <div className="text-4xl font-bold text-accent-primary mb-1">
+                <div className="text-4xl font-bold text-accent-primary mb-1" aria-label={`${analytics?.solve_stats?.total_solved || 0} total problems solved`}>
                   {analytics?.solve_stats?.total_solved || 0}
                 </div>
                 <div className="text-sm text-text-secondary">
@@ -228,7 +235,7 @@ function Dashboard() {
                   return (
                     <div key={difficulty} className="flex items-center justify-between">
                       <Badge variant={variant}>{difficulty}</Badge>
-                      <span className="text-text-primary font-medium">{count}</span>
+                      <span className="text-text-primary font-medium" aria-label={`${count} ${difficulty.toLowerCase()} problems solved`}>{count}</span>
                     </div>
                   );
                 })}
@@ -240,7 +247,7 @@ function Dashboard() {
                   <span className="text-sm text-text-secondary">
                     Recent solve rate (last 10)
                   </span>
-                  <span className="text-lg font-semibold text-accent-primary">
+                  <span className="text-lg font-semibold text-accent-primary" aria-label={`${Math.round((analytics?.solve_stats?.solve_rate_last_10 || 0) * 100)} percent solve rate`}>
                     {Math.round((analytics?.solve_stats?.solve_rate_last_10 || 0) * 100)}%
                   </span>
                 </div>
@@ -256,7 +263,7 @@ function Dashboard() {
               <h3 className="text-lg font-semibold text-text-primary mb-4">
                 Pattern Distribution
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Pattern distribution">
                 {Object.entries(analytics.pattern_distribution)
                   .sort(([, a], [, b]) => b.total - a.total)
                   .slice(0, 9)
@@ -267,23 +274,24 @@ function Dashboard() {
                       <div
                         key={pattern}
                         className="p-3 bg-black-elevated-hover rounded-lg border border-border-subtle"
+                        role="listitem"
                       >
                         <div className="text-sm font-medium text-text-primary mb-2 capitalize">
                           {pattern.replace(/-/g, ' ')}
                         </div>
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-text-secondary">
+                          <span className="text-text-secondary" aria-label={`${stats.solved} out of ${stats.total} solved`}>
                             {stats.solved}/{stats.total}
                           </span>
                           <span className={`font-semibold ${
                             solveRate >= 70 ? 'text-accent-success' :
                             solveRate >= 50 ? 'text-accent-warning' :
                             'text-accent-danger'
-                          }`}>
+                          }`} aria-label={`${Math.round(solveRate)} percent solve rate`}>
                             {Math.round(solveRate)}%
                           </span>
                         </div>
-                        <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(solveRate)} aria-valuemin="0" aria-valuemax="100" aria-label={`${pattern} progress`}>
                           <motion.div
                             className={`h-full rounded-full ${
                               solveRate >= 70 ? 'bg-accent-success' :
@@ -309,7 +317,7 @@ function Dashboard() {
             <Card className="p-4 bg-black-elevated-hover">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">🤖</span>
+                  <span className="text-2xl" aria-hidden="true">🤖</span>
                   <div>
                     <div className="text-sm font-medium text-text-primary">
                       AI Tutor Budget
@@ -320,10 +328,10 @@ function Dashboard() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-semibold text-accent-primary">
+                  <div className="text-sm font-semibold text-accent-primary" aria-label={`${analytics.rate_budget.tokens_remaining.toLocaleString()} tokens remaining`}>
                     {analytics.rate_budget.tokens_remaining.toLocaleString()} tokens
                   </div>
-                  <div className="text-xs text-text-secondary">
+                  <div className="text-xs text-text-secondary" aria-label={`${analytics.rate_budget.requests_remaining} requests remaining`}>
                     {analytics.rate_budget.requests_remaining} requests left
                   </div>
                 </div>

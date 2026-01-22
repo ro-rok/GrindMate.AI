@@ -96,15 +96,18 @@ function Login() {
             </h1>
           </Link>
           <p className="text-text-secondary">
-            Your cinematic LeetCode study companion
+            Your premium LeetCode study companion
           </p>
         </div>
 
         <Card className="p-8">
           {/* Mode tabs */}
-          <div className="flex gap-4 mb-6">
+          <div className="flex gap-4 mb-6" role="tablist" aria-label="Authentication mode">
             <button
               type="button"
+              role="tab"
+              aria-selected={mode === 'login'}
+              aria-controls="auth-panel"
               onClick={() => setMode('login')}
               className={`flex-1 pb-2 text-center font-semibold transition-all border-b-2 ${
                 mode === 'login'
@@ -116,6 +119,9 @@ function Login() {
             </button>
             <button
               type="button"
+              role="tab"
+              aria-selected={mode === 'signup'}
+              aria-controls="auth-panel"
               onClick={() => setMode('signup')}
               className={`flex-1 pb-2 text-center font-semibold transition-all border-b-2 ${
                 mode === 'signup'
@@ -133,13 +139,15 @@ function Login() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="mb-4 p-3 bg-accent-danger/10 border border-accent-danger/30 rounded-lg text-accent-danger text-sm"
+              role="alert"
+              aria-live="assertive"
             >
               {error}
             </motion.div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" id="auth-panel" role="tabpanel">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1">
                 Email
@@ -150,9 +158,11 @@ function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
                 className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
                 placeholder="you@example.com"
                 disabled={isLoading}
+                aria-required="true"
               />
             </div>
 
@@ -166,9 +176,11 @@ function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
                 placeholder="••••••••"
                 disabled={isLoading}
+                aria-required="true"
               />
             </div>
 
@@ -187,9 +199,11 @@ function Login() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   required
+                  autoComplete="new-password"
                   className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
                   placeholder="••••••••"
                   disabled={isLoading}
+                  aria-required="true"
                 />
               </motion.div>
             )}
@@ -199,10 +213,11 @@ function Login() {
               variant="primary"
               className="w-full"
               disabled={isLoading}
+              aria-busy={isLoading}
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">⏳</span>
+                  <span className="animate-spin" aria-hidden="true">⏳</span>
                   {mode === 'login' ? 'Signing in...' : 'Creating account...'}
                 </span>
               ) : (
@@ -219,7 +234,7 @@ function Login() {
                 <button
                   type="button"
                   onClick={switchMode}
-                  className="text-accent-primary hover:text-accent-primary-hover font-medium transition-colors"
+                  className="text-accent-primary hover:text-accent-primary-hover font-medium transition-colors focus:outline-none focus:underline"
                 >
                   Sign up
                 </button>
@@ -230,7 +245,7 @@ function Login() {
                 <button
                   type="button"
                   onClick={switchMode}
-                  className="text-accent-primary hover:text-accent-primary-hover font-medium transition-colors"
+                  className="text-accent-primary hover:text-accent-primary-hover font-medium transition-colors focus:outline-none focus:underline"
                 >
                   Sign in
                 </button>
@@ -243,7 +258,7 @@ function Login() {
         <div className="mt-6 text-center">
           <Link
             to="/"
-            className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+            className="text-sm text-text-secondary hover:text-text-primary transition-colors focus:outline-none focus:underline"
           >
             ← Back to home
           </Link>

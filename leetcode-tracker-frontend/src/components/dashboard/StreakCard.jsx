@@ -6,14 +6,16 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 /**
  * StreakCard component
  * Displays current streak with flame icon, longest streak, and calendar heatmap
+ * Supports demo mode for anonymous users
  * 
- * Requirements: 10.1-10.7
+ * Requirements: 4.3, 10.1-10.7
  */
 const StreakCard = ({ 
   currentStreak = 0, 
   longestStreak = 0, 
   calendarHeatmap = [],
-  onMilestone 
+  onMilestone,
+  isDemo = false
 }) => {
   const prefersReducedMotion = useReducedMotion();
   const [showConfetti, setShowConfetti] = useState(false);
@@ -48,6 +50,13 @@ const StreakCard = ({
 
   return (
     <Card className="p-6 relative overflow-hidden">
+      {/* Demo mode badge */}
+      {isDemo && (
+        <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+          Demo
+        </div>
+      )}
+
       {/* Confetti animation */}
       {showConfetti && !prefersReducedMotion && (
         <div className="absolute inset-0 pointer-events-none z-10">

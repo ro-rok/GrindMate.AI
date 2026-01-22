@@ -11,6 +11,7 @@ const Input = forwardRef(({
   helperText,
   className = '',
   containerClassName = '',
+  id,
   ...props
 }, ref) => {
   const baseStyles = 'w-full px-4 py-2 bg-black-elevated text-text-primary border rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black-base disabled:opacity-50 disabled:cursor-not-allowed';
@@ -21,25 +22,34 @@ const Input = forwardRef(({
 
   const combinedClassName = `${baseStyles} ${stateStyles} ${className}`;
 
+  // Generate unique IDs for accessibility
+  const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
+  const errorId = `${inputId}-error`;
+  const helperId = `${inputId}-helper`;
+
   return (
     <div className={`flex flex-col gap-1.5 ${containerClassName}`}>
       {label && (
-        <label className="text-sm font-medium text-text-primary">
+        <label htmlFor={inputId} className="text-sm font-medium text-text-primary">
           {label}
         </label>
       )}
       <input
         ref={ref}
+        id={inputId}
         type={type}
         className={combinedClassName}
+        aria-invalid={error ? 'true' : 'false'}
+        aria-describedby={error ? errorId : helperText ? helperId : undefined}
         {...props}
       />
       {error && (
-        <p className="text-sm text-accent-danger flex items-center gap-1">
+        <p id={errorId} className="text-sm text-accent-danger flex items-center gap-1" role="alert">
           <svg
             className="w-4 h-4"
             fill="currentColor"
             viewBox="0 0 20 20"
+            aria-hidden="true"
           >
             <path
               fillRule="evenodd"
@@ -51,7 +61,7 @@ const Input = forwardRef(({
         </p>
       )}
       {helperText && !error && (
-        <p className="text-sm text-text-secondary">
+        <p id={helperId} className="text-sm text-text-secondary">
           {helperText}
         </p>
       )}

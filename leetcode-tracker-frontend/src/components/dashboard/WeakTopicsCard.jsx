@@ -7,12 +7,14 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 /**
  * WeakTopicsCard component
  * Displays weak topics with solve rate bars and practice CTAs
+ * Supports demo mode for anonymous users
  * 
- * Requirements: 11.1-11.7
+ * Requirements: 4.6, 11.1-11.7
  */
 const WeakTopicsCard = ({ 
   weakTopics = [], 
-  onTopicClick 
+  onTopicClick,
+  isDemo = false
 }) => {
   const prefersReducedMotion = useReducedMotion();
   const [newWeakTopics, setNewWeakTopics] = useState(new Set());
@@ -42,7 +44,14 @@ const WeakTopicsCard = ({
   // Empty state
   if (weakTopics.length === 0) {
     return (
-      <Card className="p-6">
+      <Card className="p-6 relative">
+        {/* Demo mode badge */}
+        {isDemo && (
+          <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+            Demo
+          </div>
+        )}
+
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-1">
@@ -71,7 +80,14 @@ const WeakTopicsCard = ({
   const sortedTopics = [...weakTopics].sort((a, b) => a.solve_rate - b.solve_rate);
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 relative">
+      {/* Demo mode badge */}
+      {isDemo && (
+        <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+          Demo
+        </div>
+      )}
+
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-text-primary mb-1">

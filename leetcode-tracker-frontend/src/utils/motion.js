@@ -128,17 +128,20 @@ export const getGSAPConfig = (config) => {
 };
 
 /**
- * Lenis smooth scroll config
+ * Lenis smooth scroll config with reduced motion support
  * @returns {object}
  */
 export const getLenisConfig = () => {
+  const reducedMotion = prefersReducedMotion();
+  
   return {
-    duration: prefersReducedMotion() ? 0 : 1.2,
+    duration: reducedMotion ? 0 : 1.2,
     easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     direction: 'vertical',
     gestureDirection: 'vertical',
-    smooth: !prefersReducedMotion(),
+    smooth: !reducedMotion,
     smoothTouch: false,
     touchMultiplier: 2,
+    infinite: false,
   };
 };

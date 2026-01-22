@@ -42,6 +42,48 @@ const Modal = ({
     };
   }, [isOpen]);
 
+  // Focus trap - focus first focusable element when modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const modalElement = document.querySelector('[role="dialog"]');
+    if (!modalElement) return;
+
+    const focusableElements = modalElement.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    // Focus first element
+    if (firstElement) {
+      firstElement.focus();
+    }
+
+    // Trap focus within modal
+    const handleTabKey = (e) => {
+      if (e.key !== 'Tab') return;
+
+      if (e.shiftKey) {
+        // Shift + Tab
+        if (document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement?.focus();
+        }
+      } else {
+        // Tab
+        if (document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement?.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleTabKey);
+    return () => document.removeEventListener('keydown', handleTabKey);
+  }, [isOpen]);
+
   const sizeStyles = {
     sm: 'max-w-md',
     md: 'max-w-2xl',

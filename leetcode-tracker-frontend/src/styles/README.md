@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design system provides a comprehensive set of design tokens, motion utilities, and animation helpers for building the cinematic GrindMate.AI experience.
+This design system provides a comprehensive set of design tokens, motion utilities, and animation helpers for building the premium GrindMate.AI experience.
 
 ## Design Tokens
 

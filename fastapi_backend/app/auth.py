@@ -68,6 +68,43 @@ async def get_current_user(
     return UserInDB(**doc, id=doc.get("_id"))
 
 
+async def get_current_user_optional(
+    request: Request,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+) -> Optional[UserInDB]:
+    """
+    Get current user if authenticated, None if anonymous.
+    Use for endpoints that work for both authenticated and anonymous users.
+    
+    Returns:
+        UserInDB if valid session cookie exists, None otherwise
+    """
+    settings = get_settings()
+    # Get cookie from request
+    session = request.cookies.get(settings.access_token_cookie_name)
+    if not session:
+        return None
+    
+    try:
+        payload = jwt.decode(session, settings.secret_key, algorithms=["HS256"])
+        user_id = payload.get("sub")
+        token_type = payload.get("type")
+        
+        if user_id is None or token_type != "access":
+            return None
+            
+    except JWTError:
+        return None
+
+    from bson import ObjectId
+
+    doc = await db["users"].find_one({"_id": ObjectId(user_id)})
+    if not doc:
+        return None
+    return UserInDB(**doc, id=doc.get("_id"))
+
+
 CurrentUser = Annotated[UserInDB, Depends(get_current_user)]
+OptionalCurrentUser = Annotated[Optional[UserInDB], Depends(get_current_user_optional)]
 
 

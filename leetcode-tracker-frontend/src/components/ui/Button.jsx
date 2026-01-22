@@ -15,6 +15,7 @@ const Button = forwardRef(({
   className = '',
   onClick,
   type = 'button',
+  'aria-label': ariaLabel,
   ...props
 }, ref) => {
   const prefersReducedMotion = useReducedMotion();
@@ -52,6 +53,9 @@ const Button = forwardRef(({
       className={combinedClassName}
       onClick={onClick}
       disabled={disabled || loading}
+      aria-label={ariaLabel}
+      aria-busy={loading}
+      aria-disabled={disabled || loading}
       {...motionProps}
       {...props}
     >
@@ -61,6 +65,7 @@ const Button = forwardRef(({
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <circle
             className="opacity-25"
