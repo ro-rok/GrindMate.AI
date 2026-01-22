@@ -10,7 +10,8 @@ from .config import get_settings
 from .db import get_database
 from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
-from .routers import auth, companies, ping, questions, questions_standalone, users, chats, patterns, tutor
+from .routers import auth, companies, ping, questions, questions_standalone, users, chats, patterns, tutor, admin
+from .routers.admin_errors import register_admin_error_handlers
 from .init_db import create_indexes
 from .middleware import CSRFMiddleware, RateLimitMiddleware
 
@@ -53,6 +54,9 @@ def create_app() -> FastAPI:
     
     # CSRF Protection Middleware
     app.add_middleware(CSRFMiddleware)
+    
+    # Register error handlers for admin routes
+    register_admin_error_handlers(app)
 
     # Routers
     app.include_router(ping.router)
@@ -64,6 +68,7 @@ def create_app() -> FastAPI:
     app.include_router(chats.router)
     app.include_router(patterns.router)
     app.include_router(tutor.router)
+    app.include_router(admin.router)  # Admin routes
 
     @app.get("/health")
     async def health(db: AsyncIOMotorDatabase = Depends(get_database)):

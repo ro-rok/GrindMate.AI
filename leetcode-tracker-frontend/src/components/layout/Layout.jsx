@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { PageTransition } from '../animations';
 import { refreshScrollTrigger } from '../../utils/gsap';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import useAdminShortcut from '../../hooks/useAdminShortcut';
 import Header from './Header';
 import Sidebar from './Sidebar';
 
@@ -21,6 +22,9 @@ function Layout({ showSidebar = false, showHeader = true }) {
   const location = useLocation();
   const prefersReducedMotion = useReducedMotion();
 
+  // Enable admin keyboard shortcut (CTRL+SHIFT+A)
+  useAdminShortcut();
+
   // Refresh ScrollTrigger on route change
   useEffect(() => {
     if (!prefersReducedMotion) {
@@ -37,10 +41,10 @@ function Layout({ showSidebar = false, showHeader = true }) {
     <div className="min-h-screen bg-black-base flex flex-col">
       {showHeader && <Header />}
       
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1">
         {showSidebar && <Sidebar />}
         
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname} mode="fadeScale">
               <Outlet />
@@ -58,6 +62,9 @@ function Layout({ showSidebar = false, showHeader = true }) {
  */
 export function SimpleLayout() {
   const location = useLocation();
+
+  // Enable admin keyboard shortcut (CTRL+SHIFT+A)
+  useAdminShortcut();
 
   return (
     <div className="min-h-screen bg-black-base">

@@ -111,6 +111,7 @@ async def refresh_company_questions(company_id: str):
                     "topics": row.get("Topics", "").strip(),
                     "company_id": company["_id"],
                     "timeframe": timeframe,
+                    "source": "github_csv",
                     "updated_at": now,
                 }
 

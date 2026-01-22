@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 /* Apply design system base styles */
+html {
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: var(--black-base);
   color: var(--text-primary);
@@ -10,6 +16,7 @@ body {
   margin: 0;
   padding: 0;
   position: relative;
+  min-height: 100vh;
 }
 
 /* Ambient logo background watermark */
@@ -28,13 +35,6 @@ body::before {
   opacity: 0.02;
   pointer-events: none;
   z-index: 0;
-}
-
-html {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  scroll-behavior: smooth;
 }
 
 /* Disable smooth scroll for reduced motion users */
@@ -85,6 +85,7 @@ html {
 #root {
   position: relative;
   z-index: 1;
+  min-height: 100vh;
 }
 
 /* Premium card styling with subtle borders and shadows */

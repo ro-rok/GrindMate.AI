@@ -11,7 +11,11 @@ export function LenisProvider({ children }) {
 
   useEffect(() => {
     // Initialize Lenis with config
-    const lenis = new Lenis(getLenisConfig());
+    const lenis = new Lenis({
+      ...getLenisConfig(),
+      wrapper: window,
+      content: document.documentElement,
+    });
     lenisRef.current = lenis;
 
     // Animation frame loop

@@ -22,6 +22,7 @@ class UserPreferences(BaseModel):
 
 class UserPublic(MongoModel):
     email: EmailStr
+    role: str = "user"
     legacy_id: Optional[int] = None
     current_streak: int = 0
     longest_streak: int = 0
@@ -37,6 +38,7 @@ class UserPublic(MongoModel):
 class UserInDB(MongoModel):
     email: EmailStr
     encrypted_password: str
+    role: str = "user"
     legacy_id: Optional[int] = None
     current_streak: int = 0
     longest_streak: int = 0

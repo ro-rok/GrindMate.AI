@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import LoaderTerminal from '../components/LoaderTerminal';
 import Layout, { SimpleLayout } from '../components/layout/Layout';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Lazy load page components for code splitting
 const Landing = lazy(() => import('../pages/Landing'));
@@ -13,6 +14,7 @@ const QuestionList = lazy(() => import('../pages/QuestionList'));
 const FocusMode = lazy(() => import('../pages/FocusMode'));
 const Profile = lazy(() => import('../pages/Profile'));
 const Analytics = lazy(() => import('../pages/Analytics'));
+const AdminPortal = lazy(() => import('../pages/AdminPortal'));
 
 // Layout wrapper with Suspense
 function SuspenseLayout({ children }) {
@@ -117,6 +119,16 @@ const router = createBrowserRouter([
         element: (
           <SuspenseLayout>
             <Analytics />
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/admin',
+        element: (
+          <SuspenseLayout>
+            <ErrorBoundary>
+              <AdminPortal />
+            </ErrorBoundary>
           </SuspenseLayout>
         ),
       },

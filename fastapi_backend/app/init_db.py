@@ -60,6 +60,18 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     )
     logger.info("✓ Created multikey index on questions (patterns)")
     
+    # Compound index for source and titleSlug (for GraphQL imports)
+    # Requirement 16.4: Enables efficient upsert operations for GraphQL imports
+    await db.questions.create_index(
+        [
+            ("source", ASCENDING),
+            ("titleSlug", ASCENDING)
+        ],
+        name="idx_questions_source_titleslug",
+        background=True
+    )
+    logger.info("✓ Created compound index on questions (source, titleSlug)")
+    
     # ============================================================================
     # USER_QUESTIONS COLLECTION INDEXES
     # ============================================================================
@@ -237,6 +249,32 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     )
     logger.info("✓ Created TTL index on refresh_tokens (expires_at)")
     
+    # ============================================================================
+    # IMPORTS COLLECTION INDEXES
+    # ============================================================================
+    
+    # Index on created_at for sorting import batches
+    # Requirement 16.6: Enables efficient retrieval of recent imports
+    await db.imports.create_index(
+        [("created_at", DESCENDING)],
+        name="idx_imports_created_at",
+        background=True
+    )
+    logger.info("✓ Created index on imports (created_at)")
+    
+    # ============================================================================
+    # ADMIN_AUDIT_LOGS COLLECTION INDEXES
+    # ============================================================================
+    
+    # Index on timestamp for sorting audit logs
+    # Requirement 16.5: Enables efficient retrieval of audit logs
+    await db.admin_audit_logs.create_index(
+        [("timestamp", DESCENDING)],
+        name="idx_audit_logs_timestamp",
+        background=True
+    )
+    logger.info("✓ Created index on admin_audit_logs (timestamp)")
+    
     logger.info("✅ All MongoDB indexes created successfully")
 
 
@@ -253,7 +291,9 @@ async def list_indexes(db: AsyncIOMotorDatabase) -> dict:
         "chat_messages",
         "hint_unlocks",
         "rate_limits",
-        "refresh_tokens"
+        "refresh_tokens",
+        "imports",
+        "admin_audit_logs"
     ]
     
     indexes = {}
