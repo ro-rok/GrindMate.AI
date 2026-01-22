@@ -57,8 +57,8 @@ class RateBudgetResponse(BaseModel):
 async def unlock_hint(
     question_id: str,
     level: int,
-    request: HintUnlockRequest = Body(...),
     current_user: CurrentUser,
+    request: HintUnlockRequest = Body(...),
     db: AsyncIOMotorDatabase = Depends(get_database),
     tutor_service: TutorService = Depends(get_tutor_service)
 ):
