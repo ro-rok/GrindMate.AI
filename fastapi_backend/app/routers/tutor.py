@@ -254,21 +254,30 @@ async def get_rate_budget(
 # Helper functions
 async def _get_rate_budget(user_id: str, db) -> dict:
     """Get user's remaining rate budget"""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, UTC
     from bson import ObjectId
     
-    # Check if user has BYOK
+    # Check if user is admin or has BYOK
     user = await db["users"].find_one({"_id": ObjectId(user_id)})
-    if user and user.get("byok_groq_key"):
-        # BYOK users have unlimited budget
+    
+    # Admin users have unlimited budget
+    if user and user.get("role") == "admin":
         return {
             "tokens_remaining": 999999,
             "requests_remaining": 999999,
-            "reset_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
+            "reset_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()
+        }
+    
+    # BYOK users have unlimited budget
+    if user and user.get("byok_groq_key"):
+        return {
+            "tokens_remaining": 999999,
+            "requests_remaining": 999999,
+            "reset_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()
         }
     
     # Get today's rate limit record
-    today = datetime.utcnow().date()
+    today = datetime.now(UTC).date()
     rate_limit = await db["rate_limits"].find_one({
         "user_id": ObjectId(user_id),
         "date": today

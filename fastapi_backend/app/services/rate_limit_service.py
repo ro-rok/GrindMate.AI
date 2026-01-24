@@ -43,8 +43,17 @@ class RateLimitService:
             - is_allowed: True if request can proceed
             - info_dict: Contains remaining budget and reset time
         """
-        # Get user to check BYOK mode
+        # Get user to check BYOK mode and role
         user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
+        
+        # Admin users bypass rate limits
+        if user and user.get("role") == "admin":
+            return True, {
+                "tokens_remaining": float('inf'),
+                "requests_remaining": float('inf'),
+                "reset_at": None,
+                "admin_mode": True
+            }
         
         # BYOK users bypass rate limits
         if user and user.get("byok_groq_key"):
@@ -160,8 +169,19 @@ class RateLimitService:
         Returns:
             Dict with tokens_remaining, requests_remaining, reset_at
         """
-        # Check if BYOK user
+        # Check if admin or BYOK user
         user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
+        
+        # Admin users have unlimited budget
+        if user and user.get("role") == "admin":
+            return {
+                "tokens_remaining": float('inf'),
+                "requests_remaining": float('inf'),
+                "reset_at": None,
+                "admin_mode": True
+            }
+        
+        # BYOK users have unlimited budget
         if user and user.get("byok_groq_key"):
             return {
                 "tokens_remaining": float('inf'),
