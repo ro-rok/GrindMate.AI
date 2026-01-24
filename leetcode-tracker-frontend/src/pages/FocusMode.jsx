@@ -1,14 +1,16 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
+import toast from '../utils/toast';
 import useUIStore from '../store/uiStore';
 import useAuthStore from '../store/authStore';
 import { useQuestionTimer } from '../hooks/useQuestionTimer';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
+import ErrorPanel from '../components/ui/ErrorPanel';
 import TutorPanel from '../components/tutor/TutorPanel';
 import TutorFeedbackModal, { isSessionDismissed } from '../components/tutor/TutorFeedbackModal';
+import CompletionBottomSheet from '../components/focus/CompletionBottomSheet';
 import { SmartRandomButton } from '../components/question';
 import { getQuestionIdentifier } from '../utils/slugify';
 import api from '../api';
@@ -37,6 +39,8 @@ function FocusMode() {
   const [question, setQuestion] = useState(null);
   const [questionContent, setQuestionContent] = useState(null);
   const [loadingContent, setLoadingContent] = useState(false);
+  const [questionError, setQuestionError] = useState(null);
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(true);
   const [codeInput, setCodeInput] = useState('');
   const [activeTab, setActiveTab] = useState('editor'); // 'editor', 'notes', 'tutor'
   const [notes, setNotes] = useState('');
@@ -48,6 +52,8 @@ function FocusMode() {
   const [selectedLanguage, setSelectedLanguage] = useState('python');
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [usedTutor, setUsedTutor] = useState(false);
+  const [showCompletionSheet, setShowCompletionSheet] = useState(false);
+  const [tutorPanelCollapsed, setTutorPanelCollapsed] = useState(false);
   
   const codeEditorRef = useRef(null);
   const notesEditorRef = useRef(null);
@@ -67,6 +73,25 @@ function FocusMode() {
       // Timer continues running even after unmount
     };
   }, [questionId]);
+
+  // Auto-load code template when question content is fetched
+  useEffect(() => {
+    if (questionContent?.codeSnippets && questionContent.codeSnippets.length > 0 && !codeInput) {
+      // Find Python3 template first, then Python, then first available
+      let template = questionContent.codeSnippets.find(s => s.langSlug === 'python3');
+      if (!template) {
+        template = questionContent.codeSnippets.find(s => s.langSlug === 'python');
+      }
+      if (!template) {
+        template = questionContent.codeSnippets[0];
+      }
+      
+      if (template) {
+        setSelectedLanguage(template.langSlug);
+        setCodeInput(template.code);
+      }
+    }
+  }, [questionContent]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -197,94 +222,105 @@ function FocusMode() {
   };
 
   const fetchQuestion = async () => {
+    // Validate questionId exists
+    if (!questionId || questionId.trim() === '') {
+      setQuestionError({
+        title: 'Invalid Question',
+        message: 'No question ID provided. Please select a question from the list.',
+      });
+      setIsLoadingQuestion(false);
+      return;
+    }
+
+    setIsLoadingQuestion(true);
+    setQuestionError(null);
+
     try {
       const response = await api.get(`/questions/${questionId}`, {
         params: { user_id: user?.id }
       });
+      
       setQuestion(response.data);
+      setQuestionError(null);
       
       // Check if question is already solved
       if (response.data.solved) {
         setSessionState('review');
       }
       
-      // Fetch question content from LeetCode
-      fetchQuestionContent(response.data.titleSlug || response.data.link);
+      // Fetch question content from LeetCode via backend proxy
+      fetchQuestionContent();
     } catch (err) {
       console.error('Failed to fetch question:', err);
-      toast.error('Failed to load question');
+      
+      // Determine error type and message
+      let errorTitle = 'Failed to Load Question';
+      let errorMessage = 'Unable to load the question. Please try again.';
+      
+      if (err.response?.status === 404) {
+        errorTitle = 'Question Not Found';
+        errorMessage = `The question with ID "${questionId}" could not be found. It may have been removed or the ID is incorrect.`;
+      } else if (err.response?.status === 401) {
+        errorTitle = 'Authentication Required';
+        errorMessage = 'Please sign in to view this question.';
+      } else if (err.response?.status === 400) {
+        errorTitle = 'Invalid Question ID';
+        errorMessage = `The question ID "${questionId}" is not in a valid format.`;
+      } else if (err.code === 'NETWORK_ERROR' || !err.response) {
+        errorTitle = 'Network Error';
+        errorMessage = 'Unable to connect to the server. Please check your internet connection.';
+      } else {
+        errorMessage = err.response?.data?.detail || err.message || errorMessage;
+      }
+      
+      setQuestionError({
+        title: errorTitle,
+        message: errorMessage,
+      });
+      
+      // Only show toast for non-404 errors (404 is shown in ErrorPanel)
+      if (err.response?.status !== 404) {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setIsLoadingQuestion(false);
     }
   };
 
-  const fetchQuestionContent = async (titleSlugOrLink) => {
+  const fetchQuestionContent = async () => {
     setLoadingContent(true);
     try {
-      // Extract titleSlug from link if needed
-      let titleSlug = titleSlugOrLink;
-      if (titleSlugOrLink?.includes('leetcode.com')) {
-        const match = titleSlugOrLink.match(/problems\/([^\/]+)/);
-        if (match) {
-          titleSlug = match[1];
-        }
-      }
-
-      if (!titleSlug) {
-        console.warn('No titleSlug available to fetch content');
-        setLoadingContent(false);
-        return;
-      }
-
-      // Fetch from LeetCode GraphQL API
-      const graphqlQuery = {
-        query: `
-          query getQuestionDetail($titleSlug: String!) {
-            question(titleSlug: $titleSlug) {
-              questionId
-              title
-              content
-              difficulty
-              exampleTestcases
-              hints
-              solution {
-                id
-                content
-              }
-              codeSnippets {
-                lang
-                langSlug
-                code
-              }
-            }
-          }
-        `,
-        variables: { titleSlug }
-      };
-
-      const response = await fetch('https://leetcode.com/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(graphqlQuery)
-      });
-
-      const data = await response.json();
+      // Fetch from our backend proxy endpoint (avoids CORS issues)
+      const response = await api.get(`/questions/${questionId}/leetcode-content`);
       
-      if (data.data?.question) {
-        setQuestionContent(data.data.question);
+      if (response.data) {
+        setQuestionContent(response.data);
+        
+        // Show cache status in console for debugging
+        if (response.data.cached) {
+          console.log('✅ Loaded cached LeetCode content');
+        } else {
+          console.log('🌐 Fetched fresh LeetCode content (now cached)');
+        }
       } else {
-        console.warn('Question content not found in LeetCode response');
+        console.warn('Question content not found in response');
       }
     } catch (err) {
-      console.error('Failed to fetch question content from LeetCode:', err);
+      console.error('Failed to fetch question content:', err);
       // Don't show error toast - content is optional
+      // The UI will show "Question description not available" message
     } finally {
       setLoadingContent(false);
     }
   };
 
   const handleClose = () => {
-    // Trigger feedback modal if user used tutor and session not dismissed (Subtask 12.4, Requirement 8.1)
+    // Show completion sheet instead of immediately closing
+    setShowCompletionSheet(true);
+  };
+
+  const handleCompletionClose = () => {
+    // Trigger feedback modal if user used tutor and session not dismissed
     if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
       setShowFeedbackModal(true);
       return;
@@ -293,6 +329,18 @@ function FocusMode() {
     persistSession();
     stopTimer();
     navigate(-1);
+  };
+
+  const handleCompletionSolved = () => {
+    handleMarkSolved();
+    setShowCompletionSheet(false);
+  };
+
+  const handleCompletionStuck = () => {
+    updateSessionState('stuck');
+    setActiveTab('tutor');
+    setShowCompletionSheet(false);
+    toast.info('Marked as stuck. AI tutor is ready to help!');
   };
 
   const handleHintsUsedChange = (count) => {
@@ -335,11 +383,12 @@ function FocusMode() {
         });
       }
       
-      // Trigger feedback modal if user used tutor and session not dismissed (Subtask 12.4, Requirement 8.1)
+      // Show completion sheet or feedback modal
       if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
         setShowFeedbackModal(true);
       } else {
-        setTimeout(() => navigate(-1), 1500);
+        // Show completion sheet
+        setShowCompletionSheet(true);
       }
     } catch (err) {
       toast.error('Failed to mark as solved');
@@ -400,6 +449,41 @@ function FocusMode() {
     setTimeout(() => navigate(-1), 500);
   };
 
+  // Show loading state
+  if (isLoadingQuestion && !question && !questionError) {
+    return (
+      <div className="fixed inset-0 bg-black-base z-50 flex items-center justify-center">
+        <div className="text-text-secondary">Loading question...</div>
+      </div>
+    );
+  }
+
+  // Show error state with retry
+  if (questionError && !question) {
+    return (
+      <div className="fixed inset-0 bg-black-base z-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <ErrorPanel
+            title={questionError.title}
+            message={questionError.message}
+            onRetry={fetchQuestion}
+            retryLabel="Try Again"
+            variant="error"
+          />
+          <div className="mt-4 text-center">
+            <Button
+              variant="secondary"
+              onClick={() => navigate(-1)}
+            >
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error overlay if question loaded but there's a secondary error
   if (!question) {
     return (
       <div className="fixed inset-0 bg-black-base z-50 flex items-center justify-center">
@@ -411,8 +495,21 @@ function FocusMode() {
   return (
     <div className="fixed inset-0 bg-black-base z-50">
       <div className="h-full flex flex-col">
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-border-subtle bg-black-elevated shadow-lg">
+        {/* Error Banner (if error occurred but question loaded) */}
+        {questionError && question && (
+          <div className="px-6 py-2 bg-accent-danger/10 border-b border-accent-danger/30">
+            <ErrorPanel
+              title={questionError.title || 'Warning'}
+              message={questionError.message}
+              onRetry={fetchQuestion}
+              variant="warning"
+              className="border-0 bg-transparent p-0"
+            />
+          </div>
+        )}
+        
+        {/* Minimal Command Bar */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-border-soft bg-black-elevated/95 backdrop-blur-sm">
           <div className="flex items-center gap-4 flex-1 min-w-0">
             {/* Question Title */}
             <h1 className="text-lg font-semibold text-text-primary truncate">
@@ -541,9 +638,11 @@ function FocusMode() {
               
               {/* Code Snippets */}
               {questionContent?.codeSnippets && questionContent.codeSnippets.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold text-text-primary mb-3">Code Templates</h3>
-                  <div className="flex gap-2 mb-3 flex-wrap">
+                <div className="mt-6 p-4 bg-black-elevated rounded-lg border border-border-subtle">
+                  <h3 className="text-lg font-semibold text-text-primary mb-3">
+                    💻 Code Templates ({questionContent.codeSnippets.length} languages)
+                  </h3>
+                  <div className="flex gap-2 mb-2 flex-wrap">
                     {questionContent.codeSnippets.map((snippet) => (
                       <button
                         key={snippet.langSlug}
@@ -553,12 +652,19 @@ function FocusMode() {
                           setActiveTab('editor');
                           toast.success(`${snippet.lang} template loaded`);
                         }}
-                        className="px-3 py-1 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 rounded text-sm transition-colors"
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          selectedLanguage === snippet.langSlug
+                            ? 'bg-accent-primary text-white shadow-lg scale-105'
+                            : 'bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 hover:scale-105'
+                        }`}
                       >
                         {snippet.lang}
                       </button>
                     ))}
                   </div>
+                  <p className="text-xs text-text-tertiary mt-2">
+                    Click any language to load its template in the code editor
+                  </p>
                 </div>
               )}
               
@@ -583,8 +689,19 @@ function FocusMode() {
             </Card>
           </div>
 
-          {/* Right Panel: Tabbed Interface */}
-          <div className="w-[600px] border-l border-border-subtle bg-black-elevated flex flex-col">
+          {/* Right Panel: AI Tutor (Collapsible) */}
+          <div className={`${tutorPanelCollapsed ? 'w-12' : 'w-[600px]'} border-l border-border-soft bg-black-elevated flex flex-col transition-all duration-300`}>
+            {/* Collapse Toggle */}
+            <button
+              onClick={() => setTutorPanelCollapsed(!tutorPanelCollapsed)}
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-12 bg-black-elevated border border-border-soft rounded-l-lg flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-black-elevated-hover transition-colors z-10"
+              aria-label={tutorPanelCollapsed ? 'Expand AI tutor' : 'Collapse AI tutor'}
+            >
+              {tutorPanelCollapsed ? '→' : '←'}
+            </button>
+            
+            {!tutorPanelCollapsed && (
+              <div className="flex-1 flex flex-col">
             {/* Tab Navigation */}
             <div className="flex border-b border-border-subtle bg-black-elevated">
               <button
@@ -623,20 +740,100 @@ function FocusMode() {
             <div className="flex-1 overflow-hidden flex flex-col">
               {/* Editor Tab */}
               {activeTab === 'editor' && (
-                <div className="flex-1 flex flex-col p-4 transition-opacity duration-200">
-                  <h3 className="text-lg font-semibold text-text-primary mb-3">
-                    Your Code
-                  </h3>
+                <div className="flex-1 flex flex-col p-4 transition-opacity duration-200 overflow-hidden">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-text-primary">
+                      Code Editor
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      {/* Quick Code Review Button */}
+                      {codeInput && codeInput.trim() && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setActiveTab('tutor');
+                            // Small delay to ensure tab switches first
+                            setTimeout(() => {
+                              const reviewMessage = "Please review my code and provide feedback on:\n1. Correctness\n2. Time/space complexity\n3. Edge cases\n4. Code quality and best practices";
+                              // Trigger the chat with review request
+                              const event = new CustomEvent('sendTutorMessage', { detail: reviewMessage });
+                              window.dispatchEvent(event);
+                            }, 100);
+                            toast.success('Requesting code review...');
+                          }}
+                          className="text-xs"
+                        >
+                          🔍 Quick Review
+                        </Button>
+                      )}
+                      {/* Language selector in editor */}
+                      {questionContent?.codeSnippets && questionContent.codeSnippets.length > 0 && (
+                        <select
+                          value={selectedLanguage}
+                          onChange={(e) => {
+                            const snippet = questionContent.codeSnippets.find(s => s.langSlug === e.target.value);
+                            if (snippet) {
+                              setSelectedLanguage(snippet.langSlug);
+                              setCodeInput(snippet.code);
+                              toast.success(`${snippet.lang} template loaded`);
+                            }
+                          }}
+                          className="px-3 py-1 bg-black-elevated text-text-primary border border-border-subtle rounded text-sm focus:border-accent-primary focus:outline-none cursor-pointer"
+                        >
+                          {questionContent.codeSnippets.map((snippet) => (
+                            <option key={snippet.langSlug} value={snippet.langSlug}>
+                              {snippet.lang}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
                   <textarea
                     ref={codeEditorRef}
                     value={codeInput}
                     onChange={handleCodeChange}
+                    onKeyDown={(e) => {
+                      // Handle Tab key for indentation
+                      if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const start = e.target.selectionStart;
+                        const end = e.target.selectionEnd;
+                        const newValue = codeInput.substring(0, start) + '    ' + codeInput.substring(end);
+                        setCodeInput(newValue);
+                        // Set cursor position after the inserted tab
+                        setTimeout(() => {
+                          e.target.selectionStart = e.target.selectionEnd = start + 4;
+                        }, 0);
+                      }
+                      // Handle Shift+Tab for unindent
+                      else if (e.key === 'Tab' && e.shiftKey) {
+                        e.preventDefault();
+                        const start = e.target.selectionStart;
+                        const lineStart = codeInput.lastIndexOf('\n', start - 1) + 1;
+                        const lineText = codeInput.substring(lineStart, start);
+                        if (lineText.startsWith('    ')) {
+                          const newValue = codeInput.substring(0, lineStart) + codeInput.substring(lineStart + 4);
+                          setCodeInput(newValue);
+                          setTimeout(() => {
+                            e.target.selectionStart = e.target.selectionEnd = start - 4;
+                          }, 0);
+                        }
+                      }
+                    }}
                     placeholder="Write your solution here..."
                     className="flex-1 p-4 bg-black-base text-text-primary font-mono text-sm rounded-lg border border-border-subtle focus:border-accent-primary focus:outline-none resize-none transition-colors"
+                    spellCheck="false"
                   />
-                  <p className="text-xs text-text-tertiary mt-2">
-                    Your code will be included in AI tutor context for personalized feedback
-                  </p>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs text-text-tertiary">
+                      💡 Press Tab to indent, Shift+Tab to unindent
+                    </p>
+                    <p className="text-xs text-text-tertiary">
+                      {codeInput.length} characters
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -668,9 +865,20 @@ function FocusMode() {
                 />
               )}
             </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Completion Bottom Sheet */}
+      <CompletionBottomSheet
+        isOpen={showCompletionSheet}
+        onClose={handleCompletionClose}
+        onSolved={handleCompletionSolved}
+        onStuck={handleCompletionStuck}
+        questionTitle={question?.title}
+      />
 
       {/* Tutor Feedback Modal - Subtask 12.4 (Requirement 8.1) */}
       <TutorFeedbackModal

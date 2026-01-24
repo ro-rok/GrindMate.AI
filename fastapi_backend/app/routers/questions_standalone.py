@@ -375,3 +375,173 @@ async def get_question_content(
             detail=f"Failed to fetch content from LeetCode: {str(e)}"
         )
 
+
+
+
+@router.get("/{question_identifier}/leetcode-content")
+async def get_leetcode_content(
+    question_identifier: str,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Fetch LeetCode question content via GraphQL API.
+    Automatically caches content in database for faster subsequent loads.
+    
+    Returns:
+    - HTML description
+    - Code snippets for multiple languages
+    - Hints
+    - Example test cases
+    - Topic tags
+    """
+    import httpx
+    
+    # Find question by identifier
+    question = await find_question_by_identifier(db, question_identifier)
+    
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+    
+    question_obj_id = question["_id"]
+    
+    # Check if we have cached content
+    cached_content = question.get("leetcode_content")
+    cached_snippets = question.get("leetcode_code_snippets")
+    
+    if cached_content and cached_snippets:
+        # Return cached content
+        return {
+            "questionId": question.get("leetcode_question_id"),
+            "title": question.get("title"),
+            "content": cached_content,
+            "difficulty": question.get("difficulty"),
+            "exampleTestcases": question.get("leetcode_example_testcases"),
+            "hints": question.get("leetcode_hints", []),
+            "topicTags": question.get("leetcode_topic_tags", []),
+            "codeSnippets": cached_snippets,
+            "stats": question.get("leetcode_stats"),
+            "likes": question.get("leetcode_likes"),
+            "dislikes": question.get("leetcode_dislikes"),
+            "cached": True
+        }
+    
+    # Extract titleSlug from link or use titleSlug field
+    title_slug = question.get("titleSlug")
+    
+    if not title_slug and question.get("link"):
+        # Try to extract from link
+        link = question["link"]
+        if "leetcode.com/problems/" in link:
+            parts = link.split("/problems/")
+            if len(parts) > 1:
+                title_slug = parts[1].rstrip("/").split("/")[0]
+    
+    if not title_slug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question does not have a titleSlug or valid LeetCode link",
+        )
+    
+    # GraphQL query
+    graphql_query = {
+        "query": """
+            query getQuestionDetail($titleSlug: String!) {
+                question(titleSlug: $titleSlug) {
+                    questionId
+                    title
+                    content
+                    difficulty
+                    exampleTestcases
+                    hints
+                    topicTags {
+                        name
+                        slug
+                    }
+                    codeSnippets {
+                        lang
+                        langSlug
+                        code
+                    }
+                    stats
+                    likes
+                    dislikes
+                }
+            }
+        """,
+        "variables": {"titleSlug": title_slug}
+    }
+    
+    # Make request to LeetCode GraphQL API
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://leetcode.com/problems/",
+        "Origin": "https://leetcode.com"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://leetcode.com/graphql",
+                json=graphql_query,
+                headers=headers
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"LeetCode API returned status {response.status_code}",
+                )
+            
+            data = response.json()
+            
+            if not data.get("data") or not data["data"].get("question"):
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Question content not found on LeetCode",
+                )
+            
+            leetcode_question = data["data"]["question"]
+            
+            # Cache the content in database for future requests
+            update_data = {
+                "leetcode_question_id": leetcode_question.get("questionId"),
+                "leetcode_content": leetcode_question.get("content"),
+                "leetcode_hints": leetcode_question.get("hints", []),
+                "leetcode_example_testcases": leetcode_question.get("exampleTestcases"),
+                "leetcode_code_snippets": leetcode_question.get("codeSnippets", []),
+                "leetcode_topic_tags": leetcode_question.get("topicTags", []),
+                "leetcode_stats": leetcode_question.get("stats"),
+                "leetcode_likes": leetcode_question.get("likes"),
+                "leetcode_dislikes": leetcode_question.get("dislikes"),
+                "leetcode_cached_at": datetime.utcnow()
+            }
+            
+            # Update topics if available
+            if leetcode_question.get("topicTags"):
+                topics = [tag["name"] for tag in leetcode_question["topicTags"]]
+                update_data["topics"] = ", ".join(topics)
+            
+            # Update the question in database
+            await db["questions"].update_one(
+                {"_id": question_obj_id},
+                {"$set": update_data}
+            )
+            
+            # Return the fresh content
+            leetcode_question["cached"] = False
+            return leetcode_question
+            
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Request to LeetCode API timed out",
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to connect to LeetCode API: {str(e)}",
+        )

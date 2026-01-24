@@ -1177,3 +1177,160 @@ async def list_audit_logs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list audit logs"
         )
+
+
+
+# Slug Migration Endpoints
+
+class SlugMigrationResponse(BaseModel):
+    """Response for slug migration operations"""
+    success: bool
+    message: str
+    companies_updated: int = 0
+    questions_updated: int = 0
+    companies_skipped: int = 0
+    questions_skipped: int = 0
+    errors: List[str] = []
+
+
+@router.post("/migrate/slugs", response_model=SlugMigrationResponse)
+async def migrate_slugs(
+    request: Request,
+    admin_user: AdminUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Migrate all companies and questions to add slugs.
+    
+    This endpoint:
+    - Adds slug field to companies that don't have one
+    - Adds titleSlug field to questions that don't have one
+    - Skips items that already have slugs
+    - Returns counts of updated and skipped items
+    
+    Requires admin authentication.
+    """
+    import re
+    
+    def slugify_company(name: str) -> str:
+        """Convert company name to URL-friendly slug"""
+        return name.lower().replace(" ", "-").replace(".", "").replace(",", "")
+    
+    def slugify_question(title: str) -> str:
+        """Convert question title to URL-friendly slug"""
+        slug = re.sub(r'[^\w\s-]', '', title.lower())
+        slug = re.sub(r'[-\s]+', '-', slug)
+        return slug.strip('-')
+    
+    companies_updated = 0
+    companies_skipped = 0
+    questions_updated = 0
+    questions_skipped = 0
+    errors = []
+    
+    try:
+        # Migrate companies
+        companies = await db["companies"].find({}).to_list(length=None)
+        
+        for company in companies:
+            company_id = company.get("_id")
+            name = company.get("name")
+            existing_slug = company.get("slug")
+            
+            if existing_slug:
+                companies_skipped += 1
+                continue
+            
+            if not name:
+                errors.append(f"Company {company_id}: Missing name")
+                companies_skipped += 1
+                continue
+            
+            # Generate slug
+            slug = slugify_company(name)
+            
+            # Update company
+            result = await db["companies"].update_one(
+                {"_id": company_id},
+                {"$set": {"slug": slug}}
+            )
+            
+            if result.modified_count > 0:
+                companies_updated += 1
+            else:
+                errors.append(f"Company {name}: Failed to update")
+        
+        # Migrate questions
+        questions = await db["questions"].find({}).to_list(length=None)
+        
+        for question in questions:
+            question_id = question.get("_id")
+            title = question.get("title")
+            existing_slug = question.get("titleSlug")
+            
+            if existing_slug:
+                questions_skipped += 1
+                continue
+            
+            if not title:
+                errors.append(f"Question {question_id}: Missing title")
+                questions_skipped += 1
+                continue
+            
+            # Generate slug
+            slug = slugify_question(title)
+            
+            # Update question
+            result = await db["questions"].update_one(
+                {"_id": question_id},
+                {"$set": {"titleSlug": slug}}
+            )
+            
+            if result.modified_count > 0:
+                questions_updated += 1
+            else:
+                errors.append(f"Question {title}: Failed to update")
+        
+        # Log the migration
+        audit_logger = AuditLoggerService(db)
+        await audit_logger.log(
+            action="slug_migration",
+            actor_user_id=admin_user.user_id,
+            actor_email=admin_user.email,
+            details={
+                "companies_updated": companies_updated,
+                "companies_skipped": companies_skipped,
+                "questions_updated": questions_updated,
+                "questions_skipped": questions_skipped,
+                "errors_count": len(errors)
+            },
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        
+        return SlugMigrationResponse(
+            success=True,
+            message=f"Migration complete. Updated {companies_updated} companies and {questions_updated} questions.",
+            companies_updated=companies_updated,
+            questions_updated=questions_updated,
+            companies_skipped=companies_skipped,
+            questions_skipped=questions_skipped,
+            errors=errors[:10]  # Limit to first 10 errors
+        )
+        
+    except Exception as e:
+        # Log the error
+        audit_logger = AuditLoggerService(db)
+        await audit_logger.log(
+            action="slug_migration_error",
+            actor_user_id=admin_user.user_id,
+            actor_email=admin_user.email,
+            details={"error": str(e)},
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent")
+        )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Migration failed: {str(e)}"
+        )

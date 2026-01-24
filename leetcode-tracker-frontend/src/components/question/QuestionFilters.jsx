@@ -267,22 +267,24 @@ const QuestionFilters = ({
         )}
       </div>
 
-      {/* Bottom row: Question count and clear filters */}
+      {/* Bottom row: Question count, random question, and clear filters */}
       <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
         <div className="text-text-secondary text-sm">
           <span className="font-semibold text-text-primary">{questionCount}</span> questions
         </div>
         
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearFilters}
-            className="text-text-tertiary hover:text-text-primary"
-          >
-            Clear filters
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearFilters}
+              className="text-text-tertiary hover:text-text-primary"
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

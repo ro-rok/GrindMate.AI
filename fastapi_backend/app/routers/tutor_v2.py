@@ -214,13 +214,17 @@ async def chat_with_tutor(
     try:
         question_obj_id = ObjectId(request.question_id)
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": "Invalid question_id format",
-                "invalid_fields": ["question_id"]
-            }
-        )
+        # Not a valid ObjectId, try to find by titleSlug
+        question = await db["questions"].find_one({"titleSlug": request.question_id})
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error_message": "Invalid question_id format or question not found",
+                    "invalid_fields": ["question_id"]
+                }
+            )
+        question_obj_id = question["_id"]
     
     # Extract user_id from JWT token (Requirement 13.1)
     user_id = current_user.id
@@ -314,13 +318,17 @@ async def initialize_session(
     try:
         question_obj_id = ObjectId(request.question_id)
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": "Invalid question_id format",
-                "invalid_fields": ["question_id"]
-            }
-        )
+        # Not a valid ObjectId, try to find by titleSlug
+        question = await db["questions"].find_one({"titleSlug": request.question_id})
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error_message": "Invalid question_id format or question not found",
+                    "invalid_fields": ["question_id"]
+                }
+            )
+        question_obj_id = question["_id"]
     
     # Extract user_id from JWT token
     user_id = current_user.id
@@ -673,13 +681,17 @@ async def reset_tutor_conversation(
     try:
         question_obj_id = ObjectId(request.question_id)
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": "Invalid question_id format",
-                "invalid_fields": ["question_id"]
-            }
-        )
+        # Not a valid ObjectId, try to find by titleSlug
+        question = await db["questions"].find_one({"titleSlug": request.question_id})
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error_message": "Invalid question_id format or question not found",
+                    "invalid_fields": ["question_id"]
+                }
+            )
+        question_obj_id = question["_id"]
     
     # Extract user_id from JWT token
     user_id = current_user.id

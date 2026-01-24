@@ -195,6 +195,19 @@ Problem Statement:
         
         # Try to get statement from question document
         statement = question.get("statement") or question.get("description") or ""
+        
+        # Check if we have cached LeetCode content (HTML)
+        if not statement and question.get("leetcode_content"):
+            # Strip HTML tags and limit size for AI context
+            import re
+            html_content = question["leetcode_content"]
+            # Remove HTML tags
+            text_content = re.sub(r'<[^>]+>', '', html_content)
+            # Remove extra whitespace
+            text_content = re.sub(r'\s+', ' ', text_content).strip()
+            # Limit to first 1000 characters to avoid token overflow
+            statement = text_content[:1000] + "..." if len(text_content) > 1000 else text_content
+        
         constraints = question.get("constraints", "")
         examples = question.get("examples", "")
         

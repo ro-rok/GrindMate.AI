@@ -285,10 +285,19 @@ class ImporterService:
         current_time = datetime.utcnow()
         
         for question in questions:
+            # Generate titleSlug if not present (for CSV imports or missing data)
+            title_slug = question.titleSlug
+            if not title_slug and question.title:
+                import re
+                # Remove special characters and convert to lowercase
+                slug = re.sub(r'[^\w\s-]', '', question.title.lower())
+                # Replace spaces with hyphens
+                title_slug = re.sub(r'[-\s]+', '-', slug).strip('-')
+            
             # Prepare question document
             question_doc = {
                 'title': question.title,
-                'titleSlug': question.titleSlug,
+                'titleSlug': title_slug,
                 'difficulty': question.difficulty,
                 'questionFrontendId': question.questionFrontendId,
                 'link': question.link,

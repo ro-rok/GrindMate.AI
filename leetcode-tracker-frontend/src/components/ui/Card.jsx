@@ -16,8 +16,8 @@ const Card = forwardRef(({
 }, ref) => {
   const prefersReducedMotion = useReducedMotion();
 
-  const baseStyles = 'bg-black-elevated rounded-lg border border-border-subtle shadow-md';
-  const hoverStyles = hoverable ? 'transition-all duration-300 hover:shadow-lg hover:border-border-emphasis' : '';
+  const baseStyles = 'bg-black-elevated rounded-[var(--radius-lg)] border border-border-soft shadow-[var(--elevation-1)]';
+  const hoverStyles = hoverable ? 'transition-all duration-300 hover:shadow-[var(--elevation-2)] hover:border-border-soft-hover' : '';
   const clickableStyles = onClick ? 'cursor-pointer' : '';
 
   const combinedClassName = `${baseStyles} ${hoverStyles} ${clickableStyles} ${className}`;
@@ -30,7 +30,8 @@ const Card = forwardRef(({
       boxShadow: '0 0 20px rgba(14, 165, 233, 0.3)'
     } : onClick ? {
       scale: 1.01,
-      backgroundColor: 'rgba(26, 26, 26, 1)'
+      backgroundColor: 'rgba(26, 26, 26, 1)',
+      boxShadow: '0 0 20px rgba(14, 165, 233, 0.2)'
     } : {},
     transition: { duration: 0.2 },
     layoutId: layoutId

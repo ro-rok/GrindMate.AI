@@ -1,10 +1,78 @@
 import { useState, useRef, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
+import toast from '../../utils/toast';
 import ReactMarkdown from 'react-markdown';
+import { FaCopy, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import Button from '../ui/Button';
+import Tabs from '../ui/Tabs';
+import Pill from '../ui/Pill';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import CodeHighlighter from '../CodeHighligter';
 import api from '../../api';
+
+/**
+ * MessageBubble component
+ * Improved message bubbles with collapsible long sections and copy buttons
+ */
+function MessageBubble({ role, content, markdownRenderers }) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const shouldCollapse = content.length > 500;
+  const displayContent = shouldCollapse && !isExpanded 
+    ? content.substring(0, 500) + '...' 
+    : content;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div
+      className={`max-w-[85%] p-3 rounded-lg relative group ${
+        role === 'user'
+          ? 'bg-accent-primary/20 text-text-primary border border-accent-primary/30'
+          : 'bg-black-elevated text-text-secondary border border-border-soft'
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-semibold opacity-75">
+          {role === 'user' ? 'You' : 'AI Tutor'}
+        </div>
+        <div className="flex items-center gap-2">
+          {role === 'assistant' && (
+            <button
+              onClick={handleCopy}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-text-tertiary hover:text-text-primary"
+              aria-label="Copy message"
+            >
+              <FaCopy className="text-xs" />
+            </button>
+          )}
+          {shouldCollapse && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-text-tertiary hover:text-text-primary"
+              aria-label={isExpanded ? 'Collapse' : 'Expand'}
+            >
+              {isExpanded ? <FaChevronUp className="text-xs" /> : <FaChevronDown className="text-xs" />}
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="text-sm prose prose-invert max-w-none">
+        <ReactMarkdown components={markdownRenderers}>
+          {displayContent}
+        </ReactMarkdown>
+      </div>
+      {copied && (
+        <div className="absolute top-2 right-2 bg-accent-success text-white text-xs px-2 py-1 rounded">
+          Copied!
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * TutorPanel Component
@@ -62,6 +130,21 @@ function TutorPanel({
       icon: '💼', 
       description: 'Simulates technical interview coaching' 
     },
+    { 
+      value: 'code_review', 
+      label: 'Code Review', 
+      icon: '🔍', 
+      description: 'Reviews your code and suggests improvements' 
+    },
+  ];
+
+  // Suggestion chips (context-aware)
+  const suggestionChips = [
+    'Clarify constraints',
+    'Give hint',
+    'Edge cases',
+    'Optimize',
+    'Walkthrough',
   ];
 
   // Action buttons configuration
@@ -127,10 +210,27 @@ function TutorPanel({
     }
   }, [questionId, chatHistory]);
 
+  // Listen for quick review requests from code editor
+  useEffect(() => {
+    const handleQuickReview = (event) => {
+      const message = event.detail;
+      setCurrentMessage(message);
+      // Trigger send after a small delay to ensure state is updated
+      setTimeout(() => {
+        handleSendMessage(message);
+      }, 50);
+    };
+
+    window.addEventListener('sendTutorMessage', handleQuickReview);
+    return () => {
+      window.removeEventListener('sendTutorMessage', handleQuickReview);
+    };
+  }, []);
+
   // Handle mode change
   const handleModeChange = (mode) => {
     setTutorMode(mode);
-    toast.success(`Switched to ${mode} mode`);
+    // Mode change is handled by Tabs component, no toast needed
   };
 
   // Send message to AI tutor
@@ -353,28 +453,16 @@ function TutorPanel({
         </div>
       )}
       
-      {/* Tutor Mode Selector - Subtask 10.1 */}
-      <div className="p-4 border-b border-border-subtle bg-black-elevated">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">
-          Tutor Mode
-        </h3>
-        <div className="flex gap-2">
+      {/* Tutor Mode Tabs */}
+      <div className="p-4 border-b border-border-soft bg-black-elevated">
+        <Tabs value={tutorMode} onChange={handleModeChange}>
           {tutorModes.map((mode) => (
-            <button
-              key={mode.value}
-              onClick={() => handleModeChange(mode.value)}
-              className={`flex-1 p-3 rounded-lg text-xs transition-all ${
-                tutorMode === mode.value
-                  ? 'bg-accent-primary text-white shadow-md'
-                  : 'bg-black-base text-text-secondary hover:bg-border-subtle hover:text-text-primary'
-              }`}
-              title={mode.description}
-            >
-              <div className="text-xl mb-1">{mode.icon}</div>
-              <div className="font-medium">{mode.label}</div>
-            </button>
+            <Tabs.Tab key={mode.value} value={mode.value}>
+              <span className="mr-1">{mode.icon}</span>
+              {mode.label}
+            </Tabs.Tab>
           ))}
-        </div>
+        </Tabs>
       </div>
 
       {/* Action Buttons - Subtask 10.2 */}
@@ -478,22 +566,11 @@ function TutorPanel({
               key={i}
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              <div
-                className={`max-w-[85%] p-3 rounded-lg ${
-                  msg.role === 'user'
-                    ? 'bg-accent-primary/20 text-text-primary border border-accent-primary/30'
-                    : 'bg-black-elevated text-text-secondary border border-border-subtle'
-                }`}
-              >
-                <div className="text-xs font-semibold mb-2 opacity-75">
-                  {msg.role === 'user' ? 'You' : 'AI Tutor'}
-                </div>
-                <div className="text-sm prose prose-invert max-w-none">
-                  <ReactMarkdown components={markdownRenderers}>
-                    {msg.content}
-                  </ReactMarkdown>
-                </div>
-              </div>
+              <MessageBubble
+                role={msg.role}
+                content={msg.content}
+                markdownRenderers={markdownRenderers}
+              />
             </div>
           ))
         )}
@@ -511,8 +588,35 @@ function TutorPanel({
       </div>
 
       {/* Chat Input - Subtask 10.4 */}
-      <div className="p-4 border-t border-border-subtle bg-black-elevated">
+      <div className="p-4 border-t border-border-soft bg-black-elevated">
         <div className="flex flex-col gap-2">
+          {/* Suggestion Chips */}
+          {currentMessage === '' && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {suggestionChips.map((chip) => (
+                <Pill
+                  key={chip}
+                  variant="default"
+                  size="sm"
+                  className="cursor-pointer hover:bg-accent-primary/20 hover:border-accent-primary/30 transition-colors"
+                  onClick={() => {
+                    const messageMap = {
+                      'Clarify constraints': 'Can you clarify the constraints and requirements?',
+                      'Give hint': 'Can you give me a hint to help me get started?',
+                      'Edge cases': 'What are the important edge cases I should consider?',
+                      'Optimize': 'How can I optimize my solution?',
+                      'Walkthrough': 'Can you walk me through the solution step by step?',
+                    };
+                    setCurrentMessage(messageMap[chip] || chip);
+                    messageInputRef.current?.focus();
+                  }}
+                >
+                  {chip}
+                </Pill>
+              ))}
+            </div>
+          )}
+          
           <div className="flex gap-2">
             <input
               ref={messageInputRef}
@@ -527,7 +631,7 @@ function TutorPanel({
               }}
               placeholder="Ask a question... (Ctrl+Enter to send)"
               disabled={isLoading || requestsRemaining === 0}
-              className="flex-1 px-3 py-2 bg-black-base text-text-primary rounded-lg border border-border-subtle focus:border-accent-primary focus:outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-3 py-2 bg-black-base text-text-primary rounded-lg border border-border-soft focus:border-accent-primary focus:outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <Button
               onClick={() => handleSendMessage()}

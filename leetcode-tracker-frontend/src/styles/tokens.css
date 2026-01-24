@@ -38,6 +38,33 @@
   --text-tertiary: var(--gray-600);
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-emphasis: rgba(255, 255, 255, 0.12);
+  
+  /* Soft borders (low opacity) */
+  --border-soft: rgba(255, 255, 255, 0.05);
+  --border-soft-hover: rgba(255, 255, 255, 0.08);
+  
+  /* Panel gradients */
+  --panel-gradient: linear-gradient(135deg, rgba(20, 20, 20, 1) 0%, rgba(14, 14, 14, 1) 100%);
+  --panel-gradient-hover: linear-gradient(135deg, rgba(26, 26, 26, 1) 0%, rgba(20, 20, 20, 1) 100%);
+  
+  /* Brand gradient */
+  --brand-gradient: linear-gradient(135deg, var(--accent-primary) 0%, #0284c7 100%);
+  
+  /* Additional panel colors */
+  --panel: var(--black-elevated);
+  --panel2: var(--black-elevated-hover);
+  
+  /* Soft borders (low opacity for depth without heavy borders) */
+  --border-soft: rgba(255, 255, 255, 0.05);
+  --border-soft-hover: rgba(255, 255, 255, 0.1);
+  
+  /* Panel gradients */
+  --panel-gradient: linear-gradient(180deg, var(--black-elevated) 0%, var(--black-base) 100%);
+  --panel-gradient-hover: linear-gradient(180deg, var(--black-elevated-hover) 0%, var(--black-elevated) 100%);
+  
+  /* Brand gradients */
+  --brand-gradient: linear-gradient(135deg, var(--accent-primary) 0%, #0284c7 100%);
+  --brand-gradient-subtle: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(2, 132, 199, 0.05) 100%);
 
   /* ============================================
      TYPOGRAPHY
@@ -84,6 +111,15 @@
   --space-16: 64px;
   --space-20: 80px;
   --space-24: 96px;
+  
+  /* Additional spacing for better hierarchy */
+  --space-0: 0px;
+  --space-0_5: 2px;
+  --space-1_5: 6px;
+  --space-2_5: 10px;
+  --space-3_5: 14px;
+  --space-32: 128px;
+  --space-40: 160px;
 
   /* ============================================
      BORDER RADIUS
@@ -107,6 +143,13 @@
   
   /* Premium glow for focus states */
   --shadow-glow: 0 0 20px rgba(14, 165, 233, 0.3);
+  
+  /* Elevation tokens (shadow layers for depth) */
+  --elevation-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --elevation-4: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --elevation-glow: 0 0 0 1px rgba(14, 165, 233, 0.1), 0 0 20px rgba(14, 165, 233, 0.2);
 
   /* ============================================
      MOTION TOKENS

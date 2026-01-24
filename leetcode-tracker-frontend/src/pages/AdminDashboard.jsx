@@ -6,7 +6,8 @@ import useAuthStore from '../store/authStore';
 import api from '../api';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
-import { FaUsers, FaCheckCircle, FaRobot, FaChartLine, FaUserCheck, FaCrown } from 'react-icons/fa';
+import Button from '../components/ui/Button';
+import { FaUsers, FaCheckCircle, FaRobot, FaChartLine, FaUserCheck, FaCrown, FaLink } from 'react-icons/fa';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
@@ -18,6 +19,7 @@ function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [migratingSlug, setMigratingSlug] = useState(false);
   const { user, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
   const prefersReducedMotion = useReducedMotion();
@@ -59,6 +61,33 @@ function AdminDashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMigrateSlugs = async () => {
+    if (!confirm('This will add slugs to all companies and questions that don\'t have them. Continue?')) {
+      return;
+    }
+
+    setMigratingSlug(true);
+    
+    try {
+      const response = await api.post('/admin/migrate/slugs');
+      
+      toast.success(
+        `Migration complete! Updated ${response.data.companies_updated} companies and ${response.data.questions_updated} questions.`,
+        { duration: 5000 }
+      );
+      
+      if (response.data.errors && response.data.errors.length > 0) {
+        console.warn('Migration errors:', response.data.errors);
+        toast('Some items had errors. Check console for details.', { icon: '⚠️' });
+      }
+    } catch (err) {
+      console.error('Failed to migrate slugs:', err);
+      toast.error(err.response?.data?.detail || 'Failed to migrate slugs');
+    } finally {
+      setMigratingSlug(false);
     }
   };
 
@@ -139,9 +168,21 @@ function AdminDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <div className="flex items-center gap-3 mb-2">
-            <FaCrown className="text-3xl text-yellow-400" />
-            <h1 className="text-4xl font-bold text-text-primary">Admin Dashboard</h1>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <FaCrown className="text-3xl text-yellow-400" />
+              <h1 className="text-4xl font-bold text-text-primary">Admin Dashboard</h1>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleMigrateSlugs}
+              disabled={migratingSlug}
+              className="flex items-center gap-2"
+            >
+              <FaLink />
+              {migratingSlug ? 'Migrating...' : 'Generate URL Slugs'}
+            </Button>
           </div>
           <p className="text-text-tertiary mb-8">
             System overview and user statistics

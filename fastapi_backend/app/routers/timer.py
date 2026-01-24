@@ -53,13 +53,25 @@ async def start_timer(
     Start timer for a question.
     Creates or updates user_question record with timer state.
     """
+    # Try to parse as ObjectId first, then try to find by titleSlug
     try:
         question_obj_id = ObjectId(request.question_id)
+    except Exception:
+        # Not a valid ObjectId, try to find by titleSlug
+        question = await db["questions"].find_one({"titleSlug": request.question_id})
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid question_id or question not found"
+            )
+        question_obj_id = question["_id"]
+    
+    try:
         user_obj_id = ObjectId(str(current_user.id))
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid question_id"
+            detail="Invalid user_id"
         )
     
     now = datetime.now(UTC)
@@ -135,13 +147,25 @@ async def stop_timer(
     Stop timer for a question.
     Saves accumulated time to user_question record.
     """
+    # Try to parse as ObjectId first, then try to find by titleSlug
     try:
         question_obj_id = ObjectId(request.question_id)
+    except Exception:
+        # Not a valid ObjectId, try to find by titleSlug
+        question = await db["questions"].find_one({"titleSlug": request.question_id})
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid question_id or question not found"
+            )
+        question_obj_id = question["_id"]
+    
+    try:
         user_obj_id = ObjectId(str(current_user.id))
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid question_id"
+            detail="Invalid user_id"
         )
     
     now = datetime.now(UTC)
@@ -208,13 +232,25 @@ async def get_timer_state(
     """
     Get current timer state for a question.
     """
+    # Try to parse as ObjectId first, then try to find by titleSlug
     try:
         question_obj_id = ObjectId(question_id)
+    except Exception:
+        # Not a valid ObjectId, try to find by titleSlug
+        question = await db["questions"].find_one({"titleSlug": question_id})
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid question_id or question not found"
+            )
+        question_obj_id = question["_id"]
+    
+    try:
         user_obj_id = ObjectId(str(current_user.id))
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid question_id"
+            detail="Invalid user_id"
         )
     
     existing = await db["user_questions"].find_one({

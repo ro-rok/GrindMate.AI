@@ -26,6 +26,12 @@ const Badge = ({
     md: 'px-2.5 py-1 text-sm',
     lg: 'px-3 py-1.5 text-base'
   };
+  
+  // Add tier variants
+  variantStyles.tierS = 'bg-gradient-to-r from-yellow-600/20 to-yellow-500/20 text-yellow-400 border border-yellow-500/30';
+  variantStyles.tierA = 'bg-gradient-to-r from-blue-600/20 to-blue-500/20 text-blue-400 border border-blue-500/30';
+  variantStyles.quant = 'bg-gradient-to-r from-purple-600/20 to-purple-500/20 text-purple-400 border border-purple-500/30';
+  variantStyles.india = 'bg-gradient-to-r from-green-600/20 to-green-500/20 text-green-400 border border-green-500/30';
 
   const combinedClassName = `${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`;
 

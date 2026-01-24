@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import useAuthStore from '../store/authStore';
-import useUIStore from '../store/uiStore';
+import toast from '../utils/toast';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
@@ -28,7 +28,6 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 function Profile() {
   const navigate = useNavigate();
   const { user, setUser, logout } = useAuthStore();
-  const { showToast } = useUIStore();
   const prefersReducedMotion = useReducedMotion();
 
   const [loading, setLoading] = useState(true);
@@ -98,10 +97,10 @@ function Profile() {
         preferences: { reduced_motion: reducedMotion, theme: 'dark' }
       });
       
-      showToast('Settings saved successfully', 'success');
+      toast.success('Settings saved successfully');
     } catch (error) {
       console.error('Failed to save settings:', error);
-      showToast('Failed to save settings', 'error');
+      toast.error('Failed to save settings');
     } finally {
       setSavingSettings(false);
     }
@@ -109,7 +108,7 @@ function Profile() {
 
   const handleSaveByok = async () => {
     if (!groqApiKey.trim()) {
-      showToast('Please enter a valid API key', 'error');
+      toast.error('Please enter a valid API key');
       return;
     }
 
@@ -122,10 +121,10 @@ function Profile() {
       
       setByokEnabled(response.data.byok_enabled);
       setGroqApiKey('');
-      showToast('API key saved successfully', 'success');
+      toast.success('API key saved successfully');
     } catch (error) {
       console.error('Failed to save BYOK key:', error);
-      showToast('Failed to save API key', 'error');
+      toast.error('Failed to save API key');
     } finally {
       setSavingByok(false);
     }
@@ -138,10 +137,10 @@ function Profile() {
       await api.delete('/users/me/byok');
       
       setByokEnabled(false);
-      showToast('API key removed successfully', 'success');
+      toast.success('API key removed successfully');
     } catch (error) {
       console.error('Failed to remove BYOK key:', error);
-      showToast('Failed to remove API key', 'error');
+      toast.error('Failed to remove API key');
     } finally {
       setSavingByok(false);
     }
@@ -153,14 +152,14 @@ function Profile() {
       
       await api.post('/users/reset_progress');
       
-      showToast('Progress reset successfully', 'success');
+      toast.success('Progress reset successfully');
       setShowResetModal(false);
       
       // Refresh data
       await fetchProfileData();
     } catch (error) {
       console.error('Failed to reset progress:', error);
-      showToast('Failed to reset progress', 'error');
+      toast.error('Failed to reset progress');
     } finally {
       setResetting(false);
     }
@@ -172,12 +171,12 @@ function Profile() {
       
       await api.delete('/users/me');
       
-      showToast('Account deleted successfully', 'success');
+      toast.success('Account deleted successfully');
       logout();
       navigate('/');
     } catch (error) {
       console.error('Failed to delete account:', error);
-      showToast('Failed to delete account', 'error');
+      toast.error('Failed to delete account');
       setDeleting(false);
     }
   };
@@ -206,32 +205,28 @@ function Profile() {
           <p className="text-gray-400 mt-2">Manage your account and view your progress</p>
         </motion.div>
 
-        {/* User Info Card */}
+        {/* Account Summary Card */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
           <Card className="p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-50">Account Information</h2>
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400">Email:</span>
-                    <span className="text-gray-50">{user?.email}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400">Role:</span>
-                    <Badge variant={user?.role === 'admin' ? 'success' : 'default'}>
-                      {user?.role || 'user'}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400">Timezone:</span>
-                    <span className="text-gray-50">{user?.timezone || 'UTC'}</span>
-                  </div>
-                </div>
+            <h2 className="text-xl font-semibold text-text-primary mb-4">Account Summary</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-black-base rounded-lg border border-border-soft">
+                <div className="text-xs text-text-tertiary mb-1">Email</div>
+                <div className="text-sm font-medium text-text-primary truncate">{user?.email}</div>
+              </div>
+              <div className="p-4 bg-black-base rounded-lg border border-border-soft">
+                <div className="text-xs text-text-tertiary mb-1">Role</div>
+                <Badge variant={user?.role === 'admin' ? 'success' : 'default'} size="sm">
+                  {user?.role || 'user'}
+                </Badge>
+              </div>
+              <div className="p-4 bg-black-base rounded-lg border border-border-soft">
+                <div className="text-xs text-text-tertiary mb-1">Timezone</div>
+                <div className="text-sm font-medium text-text-primary">{user?.timezone || 'UTC'}</div>
               </div>
             </div>
           </Card>
@@ -245,29 +240,29 @@ function Profile() {
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
         >
           {/* Total Solved */}
-          <Card className="p-6">
-            <div className="text-gray-400 text-sm mb-1">Total Solved</div>
-            <div className="text-3xl font-bold text-gray-50">{solveStats.total_solved || 0}</div>
+          <Card className="p-6 hover:border-accent-primary/30 transition-colors">
+            <div className="text-text-tertiary text-sm mb-1">Total Solved</div>
+            <div className="text-3xl font-bold text-text-primary">{solveStats.total_solved || 0}</div>
           </Card>
 
           {/* Current Streak */}
-          <Card className="p-6">
-            <div className="text-gray-400 text-sm mb-1">Current Streak</div>
+          <Card className="p-6 hover:border-accent-primary/30 transition-colors">
+            <div className="text-text-tertiary text-sm mb-1">Current Streak</div>
             <div className="text-3xl font-bold text-accent-primary flex items-center gap-2">
               🔥 {streak?.current_streak || 0}
             </div>
           </Card>
 
           {/* Longest Streak */}
-          <Card className="p-6">
-            <div className="text-gray-400 text-sm mb-1">Longest Streak</div>
+          <Card className="p-6 hover:border-accent-primary/30 transition-colors">
+            <div className="text-text-tertiary text-sm mb-1">Longest Streak</div>
             <div className="text-3xl font-bold text-accent-success">{streak?.longest_streak || 0}</div>
           </Card>
 
           {/* Solve Rate */}
-          <Card className="p-6">
-            <div className="text-gray-400 text-sm mb-1">Recent Solve Rate</div>
-            <div className="text-3xl font-bold text-gray-50">
+          <Card className="p-6 hover:border-accent-primary/30 transition-colors">
+            <div className="text-text-tertiary text-sm mb-1">Recent Solve Rate</div>
+            <div className="text-3xl font-bold text-text-primary">
               {solveStats.solve_rate_last_10 ? `${(solveStats.solve_rate_last_10 * 100).toFixed(0)}%` : '0%'}
             </div>
           </Card>
@@ -371,51 +366,113 @@ function Profile() {
           </Card>
         </motion.div>
 
-        {/* BYOK API Key */}
+        {/* BYOK API Key - Premium Card */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
         >
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold text-gray-50 mb-2">Bring Your Own Key (BYOK)</h2>
-            <p className="text-sm text-gray-400 mb-4">
-              Use your own Groq API key for unlimited AI tutor access
-            </p>
+          <Card className="p-6 border-accent-primary/20">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-text-primary mb-1">Bring Your Own Key (BYOK)</h2>
+                <p className="text-sm text-text-secondary">
+                  Use your own Groq API key for unlimited AI tutor access
+                </p>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1 bg-accent-primary/10 border border-accent-primary/30 rounded-lg">
+                <span className="text-xs text-accent-primary font-medium">🔒 Encrypted</span>
+              </div>
+            </div>
             
             {byokEnabled ? (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                  <span className="text-green-400">✓</span>
-                  <span className="text-green-400">BYOK enabled - Using your API key</span>
+                <div className="flex items-center gap-2 p-4 bg-accent-success/10 border border-accent-success/30 rounded-lg">
+                  <span className="text-accent-success text-lg">✓</span>
+                  <div>
+                    <span className="text-accent-success font-medium">BYOK enabled</span>
+                    <p className="text-xs text-text-secondary mt-1">
+                      Your API key is encrypted and stored securely
+                    </p>
+                  </div>
+                </div>
+                <div className="p-4 bg-black-base rounded-lg border border-border-soft">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-text-secondary">API Key</span>
+                    <span className="text-xs text-text-tertiary font-mono">
+                      •••• •••• •••• {groqApiKey.slice(-4) || '••••'}
+                    </span>
+                  </div>
                 </div>
                 <Button
                   variant="danger"
                   onClick={handleRemoveByok}
                   loading={savingByok}
+                  className="w-full"
                 >
                   Remove API Key
                 </Button>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <p className="text-sm text-gray-300">
-                    Rate Limit: {rateLimit.tokens_remaining || 0} tokens, {rateLimit.requests_remaining || 0} requests remaining
-                  </p>
+                {/* Usage Meter */}
+                <div className="p-4 bg-black-base rounded-lg border border-border-soft">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-text-primary">Usage</span>
+                    <span className="text-xs text-text-tertiary">
+                      {rateLimit.requests_remaining || 0} / {rateLimit.requests_total || 100} requests
+                    </span>
+                  </div>
+                  <div className="w-full bg-black-elevated rounded-full h-2 mb-2">
+                    <div
+                      className="bg-accent-primary h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${((rateLimit.requests_remaining || 0) / (rateLimit.requests_total || 100)) * 100}%`
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-text-secondary">
+                    <span>{rateLimit.tokens_remaining || 0} tokens remaining</span>
+                    <span>{rateLimit.requests_remaining || 0} requests remaining</span>
+                  </div>
                 </div>
-                <Input
-                  type="password"
-                  placeholder="Enter your Groq API key"
-                  value={groqApiKey}
-                  onChange={(e) => setGroqApiKey(e.target.value)}
-                />
-                <Button
-                  onClick={handleSaveByok}
-                  loading={savingByok}
-                >
-                  Save API Key
-                </Button>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-text-primary mb-2">
+                      Groq API Key
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="gsk_..."
+                      value={groqApiKey}
+                      onChange={(e) => setGroqApiKey(e.target.value)}
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-text-tertiary mt-2">
+                      🔒 Your key is encrypted and stored securely. Never shared with third parties.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleSaveByok}
+                      loading={savingByok}
+                      className="flex-1"
+                    >
+                      Save API Key
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={async () => {
+                        // Test key functionality (if available)
+                        toast.info('Test key functionality coming soon');
+                      }}
+                      disabled={!groqApiKey.trim()}
+                    >
+                      Test
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </Card>

@@ -2,14 +2,18 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
-import { toast } from 'react-hot-toast';
+import toast from '../utils/toast';
 import useQuestionStore from '../store/questionStore';
 import useAuthStore from '../store/authStore';
 import QuestionFilters from '../components/question/QuestionFilters';
 import QuestionCard from '../components/question/QuestionCard';
+import QuestionRow from '../components/question/QuestionRow';
+import QuestionListView from '../components/question/QuestionListView';
 import QuestionActionModal from '../components/question/QuestionActionModal';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import Skeleton from '../components/ui/Skeleton';
+import EmptyState from '../components/ui/EmptyState';
 import LoaderTerminal from '../components/LoaderTerminal';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getQuestionIdentifier } from '../utils/slugify';
@@ -44,6 +48,7 @@ function QuestionList() {
   const [isPopulating, setIsPopulating] = useState(false);
   const [error, setError] = useState(null);
   const [actionModalQuestion, setActionModalQuestion] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
   // Fetch company details
   useEffect(() => {
@@ -187,24 +192,12 @@ function QuestionList() {
     setIsPopulating(true);
     try {
       await api.post(`/companies/${companyId}/refresh`);
-      toast.success('Import started! Refreshing questions...', {
-        style: {
-          background: '#fde68a',
-          color: '#92400e',
-          fontWeight: 'bold',
-        },
-      });
+      toast.success('Import started! Refreshing questions...');
 
       // Wait for job to complete
       setTimeout(async () => {
         await fetchQuestions();
-        toast.success('Questions refreshed!', {
-          style: {
-            background: '#fde68a',
-            color: '#92400e',
-            fontWeight: 'bold',
-          },
-        });
+        toast.success('Questions refreshed!');
       }, 3000);
     } catch (err) {
       console.error('Failed to populate:', err);
@@ -243,9 +236,7 @@ function QuestionList() {
   // Handle question click
   const handleQuestionClick = (question) => {
     if (!isAuthenticated) {
-      toast('Sign up to solve questions and track progress!', {
-        icon: '🔒',
-      });
+      toast.info('Sign up to solve questions and track progress!');
       navigate('/login');
       return;
     }
@@ -312,7 +303,7 @@ function QuestionList() {
   // Handle reset progress
   const handleResetProgress = async () => {
     if (!isAuthenticated) {
-      toast('Sign up to track progress!', { icon: '🔒' });
+      toast.info('Sign up to track progress!');
       navigate('/login');
       return;
     }
@@ -327,13 +318,7 @@ function QuestionList() {
         user_id: user.id,
       });
 
-      toast.success('Progress reset! Refreshing questions...', {
-        style: {
-          background: '#fde68a',
-          color: '#92400e',
-          fontWeight: 'bold',
-        },
-      });
+      toast.success('Progress reset! Refreshing questions...');
 
       await fetchQuestions();
     } catch (err) {
@@ -417,45 +402,16 @@ function QuestionList() {
           </div>
         </motion.div>
 
-        {/* Timeframe Tabs */}
+        {/* Sticky Filter Bar */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="mb-6"
+          className="sticky top-0 z-10 bg-black-base/95 backdrop-blur-sm border-b border-border-soft pb-4 mb-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-4"
         >
-          <div className="flex flex-wrap gap-2">
-            {['30_days', '90_days', 'more_than_six_months', 'all_time'].map((timeframe) => {
-              const labels = {
-                '30_days': '30 Days',
-                '90_days': '3 Months',
-                'more_than_six_months': '6+ Months',
-                'all_time': 'All Time',
-              };
-              
-              return (
-                <Button
-                  key={timeframe}
-                  variant={filters.timeframe === timeframe ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => handleFilterChange({ ...filters, timeframe })}
-                >
-                  {labels[timeframe]}
-                </Button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* Update Month Filters */}
-        {updateMonths.length > 0 && (
-          <motion.div
-            initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-6"
-          >
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Update Months (if available) */}
+          {updateMonths.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               <span className="text-text-tertiary text-sm font-medium">Last Updated:</span>
               {updateMonths.map((month, index) => (
                 <Button
@@ -468,22 +424,39 @@ function QuestionList() {
                 </Button>
               ))}
             </div>
-          </motion.div>
-        )}
+          )}
 
-        {/* Filters */}
-        <motion.div
-          initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="mb-6"
-        >
-          <QuestionFilters
-            filters={filters}
-            onChange={handleFilterChange}
-            questionCount={displayedQuestions.length}
-            availableTopics={availableTopics}
-          />
+          {/* Consolidated Filters */}
+          <div className="space-y-4">
+            <QuestionFilters
+              filters={filters}
+              onChange={handleFilterChange}
+              questionCount={displayedQuestions.length}
+              availableTopics={availableTopics}
+            />
+            
+            {/* Random Question Button */}
+            <div className="flex items-center gap-3 pt-2 border-t border-border-soft">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleGetRandom}
+                className="font-semibold"
+              >
+                🎲 Random Question
+              </Button>
+              {randomQuestion && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRandomQuestion(null)}
+                  className="text-text-tertiary"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
         </motion.div>
 
         {/* Random Question Card */}
@@ -566,10 +539,10 @@ function QuestionList() {
             initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
-            className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg"
+            className="mb-6 p-3 bg-accent-primary/10 border border-accent-primary/20 rounded-lg"
           >
-            <p className="text-blue-400 mb-2">
-              Sign up to track your progress and unlock personalized features!
+            <p className="text-accent-primary text-sm mb-2">
+              💡 Sign up to track your progress and unlock personalized features!
             </p>
             <Button
               variant="primary"
@@ -621,34 +594,89 @@ function QuestionList() {
           </motion.div>
         )}
 
-        {/* Questions grid */}
+        {/* View Toggle */}
         {!isLoading && displayedQuestions.length > 0 && (
-          <motion.div
-            initial={prefersReducedMotion ? {} : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.6 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            <AnimatePresence mode="popLayout">
-              {displayedQuestions.map((question, index) => (
-                <motion.div
-                  key={question.id}
-                  initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3, delay: index * 0.03 }}
-                  layout
-                >
-                  <QuestionCard
-                    question={question}
-                    solved={question.solved}
-                    onClick={() => handleQuestionClick(question)}
-                    layoutId={`question-${question.id}`}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </motion.div>
+          <div className="flex items-center justify-end gap-2 mb-4">
+            <div className="flex items-center gap-1 bg-black-elevated border border-border-soft rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-accent-primary text-white'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+                aria-label="List view"
+              >
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-accent-primary text-white'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+                aria-label="Grid view"
+              >
+                Grid
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Questions List/Grid */}
+        {!isLoading && displayedQuestions.length > 0 && (
+          <AnimatePresence mode="wait">
+            {viewMode === 'list' ? (
+              <motion.div
+                key="list"
+                initial={prefersReducedMotion ? {} : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <QuestionListView
+                  questions={displayedQuestions}
+                  onQuestionClick={handleQuestionClick}
+                  onStart={(question) => navigate(`/focus/${getQuestionIdentifier(question)}`)}
+                  onAskAI={(question) => {
+                    navigate(`/focus/${getQuestionIdentifier(question)}`);
+                    // Focus mode will open AI tutor tab
+                  }}
+                  onMarkSolved={(question, solved) => handleMarkSolved(question.id, solved)}
+                  onStar={() => {}}
+                  isLoading={false}
+                />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="grid"
+                initial={prefersReducedMotion ? {} : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              >
+                {displayedQuestions.map((question, index) => (
+                  <motion.div
+                    key={question.id}
+                    initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3, delay: index * 0.03 }}
+                    layout
+                  >
+                    <QuestionCard
+                      question={question}
+                      solved={question.solved}
+                      onClick={() => handleQuestionClick(question)}
+                      layoutId={`question-${question.id}`}
+                    />
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         )}
       </div>
     </div>
