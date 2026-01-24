@@ -86,6 +86,12 @@ class QuestionsController < ApplicationController
     uq = @current_user.user_questions.find_or_initialize_by(question: q)
     uq.solved = true
     uq.solved_at = Time.current
+    
+    # Store time spent if provided
+    if params[:time_spent_seconds].present?
+      uq.time_spent_seconds = params[:time_spent_seconds].to_i
+    end
+    
     uq.save!
   
     render json: { solved: true, question_id: q.id }, status: :ok

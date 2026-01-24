@@ -44,7 +44,7 @@ const Header = () => {
             className="flex items-center gap-3 text-xl font-bold text-text-primary hover:text-accent-primary transition-colors group"
           >
             <img 
-              src="/logo.webp" 
+              src="/favicon-bg.webp" 
               alt="GrindMate.AI Logo" 
               className="w-8 h-8 object-contain group-hover:scale-110 transition-transform"
             />

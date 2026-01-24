@@ -34,7 +34,7 @@ class TutorService:
     """Service for AI tutoring with hint ladder and chat functionality"""
     
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
-        self.db = db or get_database()
+        self.db = db if db is not None else get_database()
         self.settings = get_settings()
         self.rate_limit_service = get_rate_limit_service(self.db)
         self.encryption_service = get_encryption_service()
@@ -719,7 +719,7 @@ Guidance for this level:
         }
         
         body = {
-            "model": "llama3-8b-8192",
+            "model": "llama-3.1-8b-instant",
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 2048
@@ -784,7 +784,7 @@ Guidance for this level:
         }
         
         body = {
-            "model": "llama3-8b-8192",
+            "model": "llama-3.1-8b-instant",
             "messages": messages,
             "temperature": 0.7,
             "max_tokens": 2048
@@ -1250,3 +1250,4 @@ def get_tutor_service(db=None):
     if _tutor_service is None:
         _tutor_service = TutorService(db)
     return _tutor_service
+

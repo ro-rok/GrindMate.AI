@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import useAuthStore from '../store/authStorom';
 import api from '../api';
 import useAuthStore from '../store/authStore';
 import StreakCard from '../components/dashboard/StreakCard';
@@ -21,8 +21,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
  * Handles API errors gracefully with retry
  * Adds reveal animations with GSAP
  * 
- * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 4.9, 8.3, 8.4, 8.5
- */
+ **/
 function Analytics() {
   const [analytics, setAnalytics] = useState(null);
   const [streak, setStreak] = useState(null);

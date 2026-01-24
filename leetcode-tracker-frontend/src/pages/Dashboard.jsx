@@ -7,6 +7,7 @@ import api from '../api';
 import useAuthStore from '../store/authStore';
 import useUIStore from '../store/uiStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { getCompanyIdentifier } from '../utils/slugify';
 import StreakCard from '../components/dashboard/StreakCard';
 import WeakTopicsCard from '../components/dashboard/WeakTopicsCard';
 import Button from '../components/ui/Button';
@@ -138,8 +139,8 @@ function Dashboard() {
       // Pick a random company
       const randomCompany = companies[Math.floor(Math.random() * companies.length)];
       
-      // Navigate to that company's questions page
-      navigate(`/companies/${randomCompany.id || randomCompany._id}`);
+      // Navigate to that company's questions page using slug
+      navigate(`/companies/${getCompanyIdentifier(randomCompany)}`);
     } catch (error) {
       console.error('Failed to get random company:', error);
       showToast('Failed to get random question', 'error');

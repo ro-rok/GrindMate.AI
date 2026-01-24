@@ -21,7 +21,7 @@ class SessionService:
     """Service for managing Focus Mode session states"""
     
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
-        self.db = db or get_database()
+        self.db = db if db is not None else get_database()
     
     async def initialize_session(
         self,
@@ -30,6 +30,7 @@ class SessionService:
     ) -> ObjectId:
         """
         Initialize a new session with state "not_started".
+        If a session already exists, returns the existing session_id.
         
         Requirements: 3.1
         
@@ -38,8 +39,18 @@ class SessionService:
             question_id: Question ID
             
         Returns:
-            session_id: ObjectId of the created session
+            session_id: ObjectId of the created or existing session
         """
+        # Check if session state already exists
+        existing_state = await self.db["session_states"].find_one({
+            "user_id": user_id,
+            "question_id": question_id
+        })
+        
+        if existing_state:
+            # Return existing session_id
+            return existing_state["session_id"]
+        
         # Create new tutor session
         session = TutorSession(
             user_id=user_id,
@@ -71,9 +82,21 @@ class SessionService:
             attempts_count=0
         )
         
-        await self.db["session_states"].insert_one(
-            state.model_dump(by_alias=True)
-        )
+        try:
+            await self.db["session_states"].insert_one(
+                state.model_dump(by_alias=True)
+            )
+        except Exception as e:
+            # If duplicate key error (race condition), find existing session
+            if "duplicate key" in str(e).lower() or "E11000" in str(e):
+                existing_state = await self.db["session_states"].find_one({
+                    "user_id": user_id,
+                    "question_id": question_id
+                })
+                if existing_state:
+                    return existing_state["session_id"]
+            # Re-raise if it's a different error
+            raise
         
         return session_id
     

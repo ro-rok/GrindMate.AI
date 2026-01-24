@@ -10,7 +10,7 @@ from .config import get_settings
 from .db import get_database
 from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
-from .routers import auth, companies, ping, questions, questions_standalone, questions_smart_random, users, chats, patterns, tutor, tutor_v2, admin
+from .routers import auth, companies, ping, questions, questions_standalone, questions_smart_random, users, chats, patterns, tutor, tutor_v2, admin, analytics, timer
 from .routers.admin_errors import register_admin_error_handlers
 from .init_db import create_indexes
 from .middleware import CSRFMiddleware, RateLimitMiddleware
@@ -71,6 +71,8 @@ def create_app() -> FastAPI:
     app.include_router(tutor.router)
     app.include_router(tutor_v2.router)  # Enhanced tutor endpoints
     app.include_router(admin.router)  # Admin routes
+    app.include_router(analytics.router)  # Analytics routes
+    app.include_router(timer.router)  # Timer routes
 
     @app.get("/health")
     async def health(db: AsyncIOMotorDatabase = Depends(get_database)):
@@ -88,17 +90,41 @@ def create_app() -> FastAPI:
             results.append(CompanyPublic(**doc))
         return results
 
-    @app.get("/companies/{company_id}/questions.json", response_model=List[QuestionWithSolved])
+    @app.get("/companies/{company_identifier}/questions.json", response_model=List[QuestionWithSolved])
     async def list_questions_json(
-        company_id: str,
+        company_identifier: str,
         timeframe: Optional[str] = Query(default=None),
         difficulty: Optional[str] = Query(default=None),
         topics: Optional[str] = Query(default=None),
         user_id: Optional[str] = Query(default=None),
         db: AsyncIOMotorDatabase = Depends(get_database),
     ):
-        """Alias for /companies/{company_id}/questions with .json extension for frontend compatibility"""
+        """Alias for /companies/{company_identifier}/questions with .json extension for frontend compatibility"""
         from bson import ObjectId
+        
+        # Helper function to find company
+        async def find_company_by_identifier(identifier: str):
+            # Try to find by ObjectId first
+            try:
+                company = await db["companies"].find_one({"_id": ObjectId(identifier)})
+                if company:
+                    return company
+            except:
+                pass
+            
+            # Try to find by slug
+            company = await db["companies"].find_one({"slug": identifier})
+            if company:
+                return company
+            
+            # Try to find by name (case-insensitive)
+            company = await db["companies"].find_one({
+                "name": {"$regex": f"^{identifier}$", "$options": "i"}
+            })
+            if company:
+                return company
+            
+            return None
         
         # Helper function to get solved question IDs
         async def get_solved_ids(user_id: Optional[str]) -> set:
@@ -123,7 +149,12 @@ def create_app() -> FastAPI:
                 filters.append({"topics": {"$regex": topic, "$options": "i"}})
             return filters
         
-        company_obj_id = ObjectId(company_id)
+        # Find company
+        company = await find_company_by_identifier(company_identifier)
+        if not company:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+        
+        company_obj_id = company["_id"]
         query: dict = {"company_id": company_obj_id}
         if timeframe:
             query["timeframe"] = timeframe

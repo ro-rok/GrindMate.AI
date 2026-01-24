@@ -330,6 +330,29 @@ function TutorPanel({
 
   return (
     <div className="flex-1 flex flex-col transition-opacity duration-200 h-full">
+      {/* Question Context Display */}
+      {questionContext && (
+        <div className="p-4 border-b border-border-subtle bg-black-base">
+          <h3 className="text-sm font-semibold text-text-primary mb-2">
+            {questionContext.title}
+          </h3>
+          <div className="flex items-center gap-2 text-xs text-text-tertiary">
+            <span className={`px-2 py-0.5 rounded ${
+              questionContext.difficulty?.toLowerCase() === 'easy' ? 'bg-green-500/20 text-green-400' :
+              questionContext.difficulty?.toLowerCase() === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+              'bg-red-500/20 text-red-400'
+            }`}>
+              {questionContext.difficulty}
+            </span>
+            {questionContext.topics && (
+              <span className="text-text-tertiary">
+                {questionContext.topics.split(',').slice(0, 2).join(', ')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      
       {/* Tutor Mode Selector - Subtask 10.1 */}
       <div className="p-4 border-b border-border-subtle bg-black-elevated">
         <h3 className="text-sm font-semibold text-text-primary mb-3">

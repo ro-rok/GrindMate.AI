@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { getCompanyIdentifier } from '../../utils/slugify';
 
 /**
  * Sidebar component for company list (responsive)
@@ -68,16 +69,18 @@ const Sidebar = ({ companies = [], isLoading = false }) => {
           </div>
         ) : (
           <ul className="space-y-1 px-2">
-            {companies.map((company) => (
-              <li key={company.id}>
-                <Link
-                  to={`/companies/${company.id}`}
-                  className={`block px-3 py-2 rounded-lg transition-colors ${
-                    activeCompanyId === company.id
-                      ? 'bg-accent-primary text-white'
-                      : 'text-text-primary hover:bg-black-elevated-hover'
-                  }`}
-                >
+            {companies.map((company) => {
+              const identifier = getCompanyIdentifier(company);
+              return (
+                <li key={company.id}>
+                  <Link
+                    to={`/companies/${identifier}`}
+                    className={`block px-3 py-2 rounded-lg transition-colors ${
+                      activeCompanyId === company.id
+                        ? 'bg-accent-primary text-white'
+                        : 'text-text-primary hover:bg-black-elevated-hover'
+                    }`}
+                  >
                   <div className="flex items-center justify-between">
                     <span className="font-medium truncate">{company.name}</span>
                     {company.question_count !== undefined && (
@@ -92,7 +95,8 @@ const Sidebar = ({ companies = [], isLoading = false }) => {
                   </div>
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

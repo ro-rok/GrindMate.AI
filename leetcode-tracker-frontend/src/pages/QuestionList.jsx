@@ -12,6 +12,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import LoaderTerminal from '../components/LoaderTerminal';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { getQuestionIdentifier } from '../utils/slugify';
 import api from '../api';
 
 /**
@@ -49,6 +50,7 @@ function QuestionList() {
     const fetchCompany = async () => {
       try {
         const response = await api.get(`/companies/${companyId}`);
+        console.log('Company data received:', response.data);
         setCompany(response.data);
       } catch (err) {
         console.error('Failed to fetch company:', err);
@@ -266,7 +268,7 @@ function QuestionList() {
       
       case 'stuck':
         // Navigate to focus mode with AI tutor
-        navigate(`/focus/${actionModalQuestion.id}`);
+        navigate(`/focus/${getQuestionIdentifier(actionModalQuestion)}`);
         break;
       
       case 'unsolve':
@@ -394,8 +396,13 @@ function QuestionList() {
                 ← Back to Companies
               </button>
               <h1 className="text-4xl font-bold text-text-primary">
-                {company?.name || 'Company Questions'}
+                {company?.name || company?.id || 'Company Questions'}
               </h1>
+              {!company?.name && company?.id && (
+                <p className="text-sm text-yellow-500 mt-1">
+                  ⚠️ Company name not found (ID: {company.id})
+                </p>
+              )}
             </div>
             
             {/* Populate Button */}

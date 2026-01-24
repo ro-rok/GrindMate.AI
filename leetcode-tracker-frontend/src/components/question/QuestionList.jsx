@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { FixedSizeGrid } from 'react-window';
+import * as ReactWindow from 'react-window';
 import { motion } from 'framer-motion';
 import { FaRobot } from 'react-icons/fa';
 import QuestionCard from './QuestionCard';
 import Button from '../ui/Button';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+
+const { FixedSizeGrid } = ReactWindow;
 
 /**
  * QuestionList component

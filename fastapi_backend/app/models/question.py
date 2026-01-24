@@ -16,7 +16,7 @@ class QuestionPublic(MongoModel):
     patterns: List[str] = []
     removed: bool = False
     source: str = "github_csv"  # "github_csv" | "leetcode_graphql"
-    titleSlug: Optional[str] = None  # Used for GraphQL imports
+    titleSlug: Optional[str] = None  # Used for GraphQL imports and URL routing
 
     @field_serializer("company_id")
     def serialize_company_id(self, v: Optional[PyObjectId]) -> Optional[str]:

@@ -124,3 +124,86 @@ select option {
 select {
   color-scheme: dark;
 }
+
+/* LeetCode content styling */
+.leetcode-content {
+  line-height: 1.8;
+}
+
+.leetcode-content p {
+  margin-bottom: 1rem;
+}
+
+.leetcode-content pre {
+  background-color: var(--black-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+}
+
+.leetcode-content code {
+  background-color: var(--black-elevated);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+  color: var(--accent-primary);
+}
+
+.leetcode-content pre code {
+  background-color: transparent;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+.leetcode-content ul,
+.leetcode-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.leetcode-content li {
+  margin-bottom: 0.5rem;
+}
+
+.leetcode-content strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.leetcode-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.leetcode-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.leetcode-content th,
+.leetcode-content td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+.leetcode-content th {
+  background-color: var(--black-elevated);
+  font-weight: 600;
+}
+
+.leetcode-content blockquote {
+  border-left: 4px solid var(--accent-primary);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}

@@ -12,7 +12,43 @@ from ..services.streak_service import StreakService
 from ..services.smart_random import SmartRandomService
 
 
-router = APIRouter(prefix="/companies/{company_id}/questions", tags=["questions"])
+router = APIRouter(prefix="/companies/{company_identifier}/questions", tags=["questions"])
+
+
+def slugify(text: str) -> str:
+    """Convert company name to URL-friendly slug"""
+    return text.lower().replace(" ", "-").replace(".", "").replace(",", "")
+
+
+async def find_company_by_identifier(db: AsyncIOMotorDatabase, identifier: str):
+    """Find company by ID, slug, or name"""
+    # Try to find by ObjectId first
+    try:
+        company = await db["companies"].find_one({"_id": ObjectId(identifier)})
+        if company:
+            return company
+    except:
+        pass
+    
+    # Try to find by slug
+    company = await db["companies"].find_one({"slug": identifier})
+    if company:
+        return company
+    
+    # Try to find by name (case-insensitive)
+    company = await db["companies"].find_one({
+        "name": {"$regex": f"^{identifier}$", "$options": "i"}
+    })
+    if company:
+        return company
+    
+    # Try to find by slugified name
+    slugified = slugify(identifier)
+    company = await db["companies"].find_one({"slug": slugified})
+    if company:
+        return company
+    
+    return None
 
 
 async def _current_user_solved_ids(
@@ -43,7 +79,7 @@ def _build_topic_filters(topics_param: str) -> list[dict]:
 
 @router.get("", response_model=QuestionListResponse)
 async def list_questions(
-    company_id: str,
+    company_identifier: str,
     timeframe: Optional[str] = Query(default=None),
     difficulty: Optional[str] = Query(default=None),
     topics: Optional[str] = Query(default=None),
@@ -76,7 +112,12 @@ async def list_questions(
     
     Requirements: 4.9, 4.10, 4.11
     """
-    company_obj_id = ObjectId(company_id)
+    # Find company by identifier (ID, slug, or name)
+    company = await find_company_by_identifier(db, company_identifier)
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    
+    company_obj_id = company["_id"]
     query: dict = {"company_id": company_obj_id}
     
     # Apply filters
@@ -166,7 +207,7 @@ async def list_questions(
 
 @router.get("/random", response_model=SmartRandomResponse, status_code=status.HTTP_200_OK)
 async def random_question(
-    company_id: str,
+    company_identifier: str,
     timeframe: Optional[str] = Query(default="30_days"),
     update: Optional[str] = Query(default=None),
     difficulty: Optional[str] = Query(default=None),
@@ -192,13 +233,18 @@ async def random_question(
             detail="user_id required for smart random selection"
         )
     
+    # Find company by identifier (ID, slug, or name)
+    company = await find_company_by_identifier(db, company_identifier)
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    
     try:
-        company_obj_id = ObjectId(company_id)
+        company_obj_id = company["_id"]
         user_obj_id = ObjectId(user_id)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid company_id or user_id"
+            detail="Invalid user_id"
         )
     
     # Build filters
@@ -268,7 +314,7 @@ async def random_question(
 
 @router.get("/random.json", response_model=SmartRandomResponse, status_code=status.HTTP_200_OK)
 async def random_question_json(
-    company_id: str,
+    company_identifier: str,
     timeframe: Optional[str] = Query(default="30_days"),
     update: Optional[str] = Query(default=None),
     difficulty: Optional[str] = Query(default=None),
@@ -278,7 +324,7 @@ async def random_question_json(
     db: AsyncIOMotorDatabase = Depends(get_database),
 ):
     """
-    Alias for /companies/{company_id}/questions/random with .json extension for frontend compatibility.
+    Alias for /companies/{company_identifier}/questions/random with .json extension for frontend compatibility.
     
     Uses smart random selection algorithm.
     Requirements: 5.1-5.11
@@ -289,13 +335,18 @@ async def random_question_json(
             detail="user_id required for smart random selection"
         )
     
+    # Find company by identifier (ID, slug, or name)
+    company = await find_company_by_identifier(db, company_identifier)
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    
     try:
-        company_obj_id = ObjectId(company_id)
+        company_obj_id = company["_id"]
         user_obj_id = ObjectId(user_id)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid company_id or user_id"
+            detail="Invalid user_id"
         )
     
     # Build filters

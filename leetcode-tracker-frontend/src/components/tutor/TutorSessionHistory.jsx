@@ -8,6 +8,7 @@ import Button from '../ui/Button';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ErrorState from '../ui/ErrorState';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { getQuestionIdentifier } from '../../utils/slugify';
 
 /**
  * TutorSessionHistory Component
@@ -59,8 +60,8 @@ const TutorSessionHistory = ({ userId }) => {
     fetchSessions();
   };
 
-  const handleQuestionClick = (questionId) => {
-    navigate(`/focus/${questionId}`);
+  const handleQuestionClick = (question) => {
+    navigate(`/focus/${getQuestionIdentifier(question)}`);
   };
 
   const toggleSessionExpansion = (sessionId) => {

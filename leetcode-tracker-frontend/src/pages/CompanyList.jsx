@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
@@ -8,6 +8,7 @@ import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import { motionVariants, motionTransitions, staggerChildren } from '../utils/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { getCompanyIdentifier } from '../utils/slugify';
 
 /**
  * CompanyList page
@@ -89,7 +90,7 @@ function CompanyList() {
 
   // Handle company card click (Requirement 3.5)
   const handleCompanyClick = (company) => {
-    navigate(`/companies/${company.id || company._id}`);
+    navigate(`/companies/${getCompanyIdentifier(company)}`);
   };
 
   // Motion variants

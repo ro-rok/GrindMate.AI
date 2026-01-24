@@ -3,12 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import useUIStore from '../store/uiStore';
 import useAuthStore from '../store/authStore';
+import { useQuestionTimer } from '../hooks/useQuestionTimer';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import TutorPanel from '../components/tutor/TutorPanel';
 import TutorFeedbackModal, { isSessionDismissed } from '../components/tutor/TutorFeedbackModal';
 import { SmartRandomButton } from '../components/question';
+import { getQuestionIdentifier } from '../utils/slugify';
 import api from '../api';
 
 /**
@@ -22,13 +24,23 @@ function FocusMode() {
   const { user } = useAuthStore();
   const { openFocusMode, closeFocusMode } = useUIStore();
 
+  // Use the question timer hook
+  const { 
+    elapsedTime, 
+    isRunning, 
+    formattedTime, 
+    startTimer, 
+    stopTimer, 
+    saveTime 
+  } = useQuestionTimer(questionId, user?.id);
+
   const [question, setQuestion] = useState(null);
+  const [questionContent, setQuestionContent] = useState(null);
+  const [loadingContent, setLoadingContent] = useState(false);
   const [codeInput, setCodeInput] = useState('');
   const [activeTab, setActiveTab] = useState('editor'); // 'editor', 'notes', 'tutor'
   const [notes, setNotes] = useState('');
   const [sessionState, setSessionState] = useState('not_started'); // 'not_started', 'attempting', 'stuck', 'solved', 'review'
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [timerRunning, setTimerRunning] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [editorCursorPosition, setEditorCursorPosition] = useState(0);
   const [editorScrollTop, setEditorScrollTop] = useState(0);
@@ -37,16 +49,8 @@ function FocusMode() {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [usedTutor, setUsedTutor] = useState(false);
   
-  const timerIntervalRef = useRef(null);
   const codeEditorRef = useRef(null);
   const notesEditorRef = useRef(null);
-
-  // Format elapsed time as MM:SS
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
   // Initialize session and start timer
   useEffect(() => {
@@ -54,51 +58,15 @@ function FocusMode() {
     fetchQuestion();
     initializeSession();
 
-    // Start timer
-    setTimerRunning(true);
+    // Start timer automatically
+    startTimer();
 
     return () => {
       closeFocusMode();
       persistSession();
-      stopTimer();
+      // Timer continues running even after unmount
     };
   }, [questionId]);
-
-  // Timer logic
-  useEffect(() => {
-    if (timerRunning) {
-      timerIntervalRef.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
-    } else {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    }
-
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
-  }, [timerRunning]);
-
-  // Handle tab visibility changes (pause/resume timer)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        setTimerRunning(false);
-      } else {
-        setTimerRunning(true);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -173,13 +141,6 @@ function FocusMode() {
     }
   };
 
-  const stopTimer = () => {
-    setTimerRunning(false);
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-    }
-  };
-
   const persistSession = async () => {
     if (!sessionId) return;
 
@@ -246,9 +207,79 @@ function FocusMode() {
       if (response.data.solved) {
         setSessionState('review');
       }
+      
+      // Fetch question content from LeetCode
+      fetchQuestionContent(response.data.titleSlug || response.data.link);
     } catch (err) {
       console.error('Failed to fetch question:', err);
       toast.error('Failed to load question');
+    }
+  };
+
+  const fetchQuestionContent = async (titleSlugOrLink) => {
+    setLoadingContent(true);
+    try {
+      // Extract titleSlug from link if needed
+      let titleSlug = titleSlugOrLink;
+      if (titleSlugOrLink?.includes('leetcode.com')) {
+        const match = titleSlugOrLink.match(/problems\/([^\/]+)/);
+        if (match) {
+          titleSlug = match[1];
+        }
+      }
+
+      if (!titleSlug) {
+        console.warn('No titleSlug available to fetch content');
+        setLoadingContent(false);
+        return;
+      }
+
+      // Fetch from LeetCode GraphQL API
+      const graphqlQuery = {
+        query: `
+          query getQuestionDetail($titleSlug: String!) {
+            question(titleSlug: $titleSlug) {
+              questionId
+              title
+              content
+              difficulty
+              exampleTestcases
+              hints
+              solution {
+                id
+                content
+              }
+              codeSnippets {
+                lang
+                langSlug
+                code
+              }
+            }
+          }
+        `,
+        variables: { titleSlug }
+      };
+
+      const response = await fetch('https://leetcode.com/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(graphqlQuery)
+      });
+
+      const data = await response.json();
+      
+      if (data.data?.question) {
+        setQuestionContent(data.data.question);
+      } else {
+        console.warn('Question content not found in LeetCode response');
+      }
+    } catch (err) {
+      console.error('Failed to fetch question content from LeetCode:', err);
+      // Don't show error toast - content is optional
+    } finally {
+      setLoadingContent(false);
     }
   };
 
@@ -281,11 +312,21 @@ function FocusMode() {
 
   const handleMarkSolved = async () => {
     try {
-      await api.post(`/questions/${questionId}/solve.json?user_id=${user.id}`);
+      // Stop timer
+      stopTimer();
+      
+      // Save time to backend
+      await saveTime();
+      
+      // Mark as solved with time spent
+      await api.post(`/questions/${questionId}/solve.json?user_id=${user.id}`, {
+        time_spent_seconds: elapsedTime
+      });
+      
       toast.success('Marked as solved! 🎉');
       updateSessionState('solved');
       
-      // End session
+      // End session with final time
       if (sessionId) {
         await api.post('/tutor/session/end', {
           session_id: sessionId,
@@ -398,7 +439,8 @@ function FocusMode() {
             {/* Timer */}
             <div className="flex items-center gap-2 text-text-secondary text-sm">
               <span>⏱️</span>
-              <span className="font-mono">{formatTime(elapsedTime)}</span>
+              <span className="font-mono">{formattedTime}</span>
+              {isRunning && <span className="text-green-400">●</span>}
             </div>
           </div>
           
@@ -410,7 +452,7 @@ function FocusMode() {
               showToggle={false}
               onQuestionSelected={(question) => {
                 // Navigate to the new question in Focus Mode
-                navigate(`/focus/${question.question_id}`);
+                navigate(`/focus/${getQuestionIdentifier(question)}`);
               }}
             />
             {sessionState === 'attempting' && (
@@ -475,12 +517,67 @@ function FocusMode() {
                 </a>
               </div>
               
-              {/* Question Statement */}
-              {question.statement && (
+              {/* Question Content from LeetCode */}
+              {loadingContent && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-text-secondary">Loading question content...</div>
+                </div>
+              )}
+              
+              {!loadingContent && questionContent?.content && (
                 <div className="prose prose-invert max-w-none">
-                  <div className="text-text-secondary whitespace-pre-wrap">
-                    {question.statement}
+                  <div 
+                    className="text-text-secondary leetcode-content"
+                    dangerouslySetInnerHTML={{ __html: questionContent.content }}
+                  />
+                </div>
+              )}
+              
+              {!loadingContent && !questionContent?.content && (
+                <div className="text-text-tertiary text-sm italic py-4">
+                  Question description not available. Click "Open on LeetCode" to view the full problem.
+                </div>
+              )}
+              
+              {/* Code Snippets */}
+              {questionContent?.codeSnippets && questionContent.codeSnippets.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-lg font-semibold text-text-primary mb-3">Code Templates</h3>
+                  <div className="flex gap-2 mb-3 flex-wrap">
+                    {questionContent.codeSnippets.map((snippet) => (
+                      <button
+                        key={snippet.langSlug}
+                        onClick={() => {
+                          setSelectedLanguage(snippet.langSlug);
+                          setCodeInput(snippet.code);
+                          setActiveTab('editor');
+                          toast.success(`${snippet.lang} template loaded`);
+                        }}
+                        className="px-3 py-1 bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 rounded text-sm transition-colors"
+                      >
+                        {snippet.lang}
+                      </button>
+                    ))}
                   </div>
+                </div>
+              )}
+              
+              {/* Hints */}
+              {questionContent?.hints && questionContent.hints.length > 0 && (
+                <div className="mt-6">
+                  <details className="group">
+                    <summary className="cursor-pointer text-text-primary font-semibold mb-2 hover:text-accent-primary transition-colors">
+                      💡 Hints ({questionContent.hints.length})
+                    </summary>
+                    <div className="space-y-2 mt-3">
+                      {questionContent.hints.map((hint, index) => (
+                        <div key={index} className="p-3 bg-black-elevated rounded border border-border-subtle">
+                          <span className="text-accent-primary font-semibold">Hint {index + 1}:</span>
+                          <span className="text-text-secondary ml-2">{hint}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </div>
               )}
             </Card>

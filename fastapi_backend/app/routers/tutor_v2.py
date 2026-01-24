@@ -40,6 +40,35 @@ class TutorChatResponse(BaseModel):
     session_id: str
     tokens_remaining: int
     requests_remaining: int
+    
+    @classmethod
+    def from_result(cls, result: dict):
+        """Create response from service result, handling infinity values"""
+        tokens_remaining = result.get("tokens_remaining")
+        requests_remaining = result.get("requests_remaining")
+        
+        # Convert infinity to a large number for API response
+        # Also handle None or other edge cases
+        if tokens_remaining == float('inf') or tokens_remaining is None:
+            tokens_remaining = 999999999
+        if requests_remaining == float('inf') or requests_remaining is None:
+            requests_remaining = 999999999
+        
+        # Ensure we have valid integers
+        try:
+            tokens_remaining = int(tokens_remaining) if tokens_remaining != float('inf') else 999999999
+            requests_remaining = int(requests_remaining) if requests_remaining != float('inf') else 999999999
+        except (ValueError, TypeError):
+            tokens_remaining = 999999999
+            requests_remaining = 999999999
+            
+        return cls(
+            response_text=result["response_text"],
+            hints_used_count=result["hints_used_count"],
+            session_id=result["session_id"],
+            tokens_remaining=tokens_remaining,
+            requests_remaining=requests_remaining
+        )
 
 
 class TutorChatErrorResponse(BaseModel):
@@ -112,6 +141,11 @@ class SmartRandomResponse(BaseModel):
     frequency: Optional[int] = None
 
 
+@router.get("/test")
+async def test_tutor_route():
+    """Test endpoint to verify router is working"""
+    return {"message": "Tutor router is working", "path": "/tutor/test"}
+
 @router.post(
     "/chat",
     response_model=TutorChatResponse,
@@ -142,6 +176,7 @@ async def chat_with_tutor(
     - HTTP 403: Authorization failure
     - HTTP 429: Rate limit exceeded
     """
+    print(f"DEBUG: /tutor/chat endpoint called with question_id={request.question_id}, tutor_mode={request.tutor_mode}")
     # Create service instance
     tutor_service = TutorService(db)
 
@@ -202,13 +237,7 @@ async def chat_with_tutor(
         )
         
         # Return response with HTTP 200 (Requirement 13.2)
-        return TutorChatResponse(
-            response_text=result["response_text"],
-            hints_used_count=result["hints_used_count"],
-            session_id=result["session_id"],
-            tokens_remaining=result["tokens_remaining"],
-            requests_remaining=result["requests_remaining"]
-        )
+        return TutorChatResponse.from_result(result)
         
     except HTTPException as e:
         # Re-raise HTTP exceptions (rate limit, etc.)
@@ -216,6 +245,9 @@ async def chat_with_tutor(
     
     except ValueError as e:
         # Question not found or content unavailable
+        import traceback
+        print(f"ValueError in /tutor/chat: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -224,13 +256,213 @@ async def chat_with_tutor(
         )
     
     except Exception as e:
-        # Internal server error
+        # Catch all other exceptions including Pydantic ValidationError
+        from pydantic import ValidationError
+        import traceback
+        
+        if isinstance(e, ValidationError):
+            print(f"ValidationError in /tutor/chat: {str(e)}")
+            print(traceback.format_exc())
+            # This shouldn't happen with from_result, but handle it gracefully
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "error_message": "Failed to format response. Please contact support."
+                }
+            )
+        # Internal server error - log the full traceback for debugging
+        import traceback
+        print(f"ERROR in /tutor/chat: {str(e)}")
+        print(traceback.format_exc())
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error_message": f"Failed to process chat message: {str(e)}"
             }
         )
+
+
+class SessionInitializeRequest(BaseModel):
+    question_id: str = Field(..., description="Question ID")
+
+
+class SessionInitializeResponse(BaseModel):
+    session_id: str
+    message: str = "Session initialized successfully"
+
+
+@router.post(
+    "/session/initialize",
+    response_model=SessionInitializeResponse,
+    status_code=status.HTTP_200_OK
+)
+async def initialize_session(
+    request: SessionInitializeRequest,
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Initialize a new tutor session for a question.
+    
+    Creates a session record to track:
+    - Start time
+    - Question being worked on
+    - User progress
+    """
+    # Validate question_id format
+    try:
+        question_obj_id = ObjectId(request.question_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error_message": "Invalid question_id format",
+                "invalid_fields": ["question_id"]
+            }
+        )
+    
+    # Extract user_id from JWT token
+    user_id = current_user.id
+    
+    try:
+        # Create session service instance
+        session_service = SessionService(db)
+        
+        # Create new session
+        session_id = await session_service.initialize_session(
+            user_id=user_id,
+            question_id=question_obj_id
+        )
+        
+        return SessionInitializeResponse(
+            session_id=str(session_id)
+        )
+        
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"ERROR in /tutor/session/initialize: {str(e)}")
+        print(error_traceback)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error_message": f"Failed to initialize session: {str(e)}"
+            }
+        )
+
+
+class SessionUpdateRequest(BaseModel):
+    session_id: str = Field(..., description="Session ID")
+    elapsed_time: int = Field(..., description="Elapsed time in seconds")
+    state: Optional[str] = Field(default=None, description="Session state")
+    hints_used: Optional[int] = Field(default=None, description="Number of hints used")
+
+
+@router.post(
+    "/session/update",
+    status_code=status.HTTP_200_OK
+)
+async def update_session(
+    request: SessionUpdateRequest,
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Update session progress (time, state, hints).
+    """
+    try:
+        session_obj_id = ObjectId(request.session_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session_id format"
+        )
+    
+    update_data = {
+        "time_spent_seconds": request.elapsed_time,
+        "updated_at": datetime.now(UTC)
+    }
+    
+    if request.state:
+        update_data["final_state"] = request.state
+    
+    if request.hints_used is not None:
+        update_data["hints_used"] = request.hints_used
+    
+    await db["tutor_sessions"].update_one(
+        {"_id": session_obj_id, "user_id": ObjectId(current_user.id)},
+        {"$set": update_data}
+    )
+    
+    return {"success": True}
+
+
+class SessionEndRequest(BaseModel):
+    session_id: str = Field(..., description="Session ID")
+    final_state: str = Field(..., description="Final state: solved, unsolved, abandoned")
+    total_time: int = Field(..., description="Total time spent in seconds")
+
+
+@router.post(
+    "/session/end",
+    status_code=status.HTTP_200_OK
+)
+async def end_session(
+    request: SessionEndRequest,
+    current_user: CurrentUser,
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    End a tutor session and record final stats.
+    """
+    try:
+        session_obj_id = ObjectId(request.session_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid session_id format"
+        )
+    
+    # Update session
+    session = await db["tutor_sessions"].find_one_and_update(
+        {"_id": session_obj_id, "user_id": ObjectId(current_user.id)},
+        {
+            "$set": {
+                "session_end_time": datetime.now(UTC),
+                "final_state": request.final_state,
+                "time_spent_seconds": request.total_time,
+                "solved": request.final_state == "solved",
+                "updated_at": datetime.now(UTC)
+            }
+        }
+    )
+    
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    # Update user_question with time spent
+    if request.final_state == "solved":
+        await db["user_questions"].update_one(
+            {
+                "user_id": ObjectId(current_user.id),
+                "question_id": session["question_id"]
+            },
+            {
+                "$set": {
+                    "time_spent_seconds": request.total_time,
+                    "solved": True,
+                    "solved_at": datetime.now(UTC),
+                    "updated_at": datetime.now(UTC)
+                }
+            },
+            upsert=True
+        )
+    
+    return {"success": True, "message": "Session ended successfully"}
 
 
 @router.get(

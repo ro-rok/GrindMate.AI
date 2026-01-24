@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui';
+import { getQuestionIdentifier } from '../../utils/slugify';
 import api from '../../api';
 
 /**
@@ -58,7 +59,7 @@ export default function SmartRandomButton({
       if (onQuestionSelected) {
         onQuestionSelected(question);
       } else {
-        navigate(`/focus/${question.question_id}`);
+        navigate(`/focus/${getQuestionIdentifier(question)}`);
       }
     } catch (err) {
       console.error('Failed to get smart random question:', err);

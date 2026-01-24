@@ -69,10 +69,13 @@ class RateLimitService:
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
+        # Convert date to datetime for MongoDB compatibility
+        today_datetime = datetime.combine(today_local, datetime.min.time())
+        
         # Get today's rate limit record
         rate_limit = await self.db["rate_limits"].find_one({
             "user_id": ObjectId(user_id),
-            "date": today_local
+            "date": today_datetime
         })
         
         # Calculate remaining budget
@@ -117,6 +120,9 @@ class RateLimitService:
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
+        # Convert date to datetime for MongoDB compatibility
+        today_datetime = datetime.combine(today_local, datetime.min.time())
+        
         # Calculate expiry (48 hours from now for TTL index)
         expires_at = datetime.now(UTC) + timedelta(days=2)
         
@@ -124,7 +130,7 @@ class RateLimitService:
         result = await self.db["rate_limits"].update_one(
             {
                 "user_id": ObjectId(user_id),
-                "date": today_local
+                "date": today_datetime
             },
             {
                 "$inc": {
@@ -142,7 +148,7 @@ class RateLimitService:
         # Get updated rate limit
         rate_limit = await self.db["rate_limits"].find_one({
             "user_id": ObjectId(user_id),
-            "date": today_local
+            "date": today_datetime
         })
         
         tokens_remaining = self.DEFAULT_TOKEN_LIMIT - rate_limit.get("tokens_used", 0)
@@ -195,10 +201,13 @@ class RateLimitService:
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
+        # Convert date to datetime for MongoDB compatibility
+        today_datetime = datetime.combine(today_local, datetime.min.time())
+        
         # Get today's rate limit record
         rate_limit = await self.db["rate_limits"].find_one({
             "user_id": ObjectId(user_id),
-            "date": today_local
+            "date": today_datetime
         })
         
         tokens_used = rate_limit.get("tokens_used", 0) if rate_limit else 0
@@ -234,10 +243,13 @@ class RateLimitService:
         now_local = datetime.now(user_tz)
         today_local = now_local.date()
         
+        # Convert date to datetime for MongoDB compatibility
+        today_datetime = datetime.combine(today_local, datetime.min.time())
+        
         # Check if there's a rate limit record for today
         rate_limit = await self.db["rate_limits"].find_one({
             "user_id": ObjectId(user_id),
-            "date": today_local
+            "date": today_datetime
         })
         
         # If no record for today, budget is effectively reset

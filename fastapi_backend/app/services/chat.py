@@ -106,7 +106,7 @@ Please:
         "Content-Type": "application/json",
     }
     body = {
-        "model": "llama3-8b-8192",
+        "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content": system_msg},
             {"role": "user", "content": user_msg_combined},
@@ -141,5 +141,6 @@ Please:
     }
 
     return {"reply": reply_text, "usage": usage_headers}
+
 
 

@@ -1,5 +1,6 @@
 import csv
 import urllib.parse
+import re
 from datetime import datetime
 
 import httpx
@@ -18,6 +19,15 @@ FILE_MAP = {
     "more_than_six_months": "4. More Than Six Months.csv",
     "all_time": "5. All.csv",
 }
+
+
+def slugify_question_title(title: str) -> str:
+    """Convert question title to URL-friendly slug"""
+    # Remove special characters and convert to lowercase
+    slug = re.sub(r'[^\w\s-]', '', title.lower())
+    # Replace spaces with hyphens
+    slug = re.sub(r'[-\s]+', '-', slug)
+    return slug.strip('-')
 
 
 async def refresh_company_questions(company_id: str):
@@ -102,6 +112,9 @@ async def refresh_company_questions(company_id: str):
                 except (ValueError, TypeError):
                     acceptance_rate = 0.0
                 
+                # Generate titleSlug from title
+                title_slug = slugify_question_title(title) if title else None
+                
                 update_doc = {
                     "title": title,
                     "link": link,
@@ -114,6 +127,10 @@ async def refresh_company_questions(company_id: str):
                     "source": "github_csv",
                     "updated_at": now,
                 }
+                
+                # Add titleSlug if generated
+                if title_slug:
+                    update_doc["titleSlug"] = title_slug
 
                 if existing:
                     # Update existing question
