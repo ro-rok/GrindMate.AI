@@ -101,6 +101,18 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     )
     logger.info("✓ Created unique compound index on user_questions (user_id, question_id)")
     
+    # NEW: Index for recent company tracking
+    # Requirement 11.6: Optimizes smart random selection by recent companies
+    await db.user_questions.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("last_attempt_at", DESCENDING)
+        ],
+        name="idx_user_questions_user_last_attempt",
+        background=True
+    )
+    logger.info("✓ Created compound index on user_questions (user_id, last_attempt_at)")
+    
     # ============================================================================
     # USERS COLLECTION INDEXES
     # ============================================================================
@@ -140,6 +152,18 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         background=True
     )
     logger.info("✓ Created compound index on chat_messages (user_id, question_id, created_at)")
+    
+    # NEW: Index for session-based chat retrieval
+    # Requirement 11.1: Optimizes fetching messages by session
+    await db.chat_messages.create_index(
+        [
+            ("session_id", ASCENDING),
+            ("created_at", ASCENDING)
+        ],
+        name="idx_chat_messages_session_created",
+        background=True
+    )
+    logger.info("✓ Created compound index on chat_messages (session_id, created_at)")
     
     # Compound index for cache lookup
     # Optimizes finding cached AI responses
@@ -250,6 +274,88 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     logger.info("✓ Created TTL index on refresh_tokens (expires_at)")
     
     # ============================================================================
+    # TUTOR_SESSIONS COLLECTION INDEXES
+    # ============================================================================
+    
+    # Unique compound index for session identification
+    # Requirement 11.1: Ensures one session per user-question-start_time combination
+    await db.tutor_sessions.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("question_id", ASCENDING),
+            ("session_start_time", ASCENDING)
+        ],
+        name="idx_tutor_sessions_user_question_start_unique",
+        unique=True,
+        background=True
+    )
+    logger.info("✓ Created unique compound index on tutor_sessions (user_id, question_id, session_start_time)")
+    
+    # Compound index for user session history
+    # Requirement 11.4: Optimizes fetching recent sessions for user profile
+    await db.tutor_sessions.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("created_at", DESCENDING)
+        ],
+        name="idx_tutor_sessions_user_created",
+        background=True
+    )
+    logger.info("✓ Created compound index on tutor_sessions (user_id, created_at)")
+    
+    # ============================================================================
+    # TUTOR_FEEDBACK COLLECTION INDEXES
+    # ============================================================================
+    
+    # Unique index on session_id
+    # Requirement 11.2: Ensures one feedback per session
+    await db.tutor_feedback.create_index(
+        [("session_id", ASCENDING)],
+        name="idx_tutor_feedback_session_unique",
+        unique=True,
+        background=True
+    )
+    logger.info("✓ Created unique index on tutor_feedback (session_id)")
+    
+    # Compound index for user feedback history
+    # Requirement 11.2: Optimizes fetching feedback by user
+    await db.tutor_feedback.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("created_at", DESCENDING)
+        ],
+        name="idx_tutor_feedback_user_created",
+        background=True
+    )
+    logger.info("✓ Created compound index on tutor_feedback (user_id, created_at)")
+    
+    # ============================================================================
+    # SESSION_STATES COLLECTION INDEXES
+    # ============================================================================
+    
+    # Unique compound index for user-question state tracking
+    # Requirement 11.3: Ensures one active state per user-question pair
+    await db.session_states.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("question_id", ASCENDING)
+        ],
+        name="idx_session_states_user_question_unique",
+        unique=True,
+        background=True
+    )
+    logger.info("✓ Created unique compound index on session_states (user_id, question_id)")
+    
+    # Index on session_id for quick lookups
+    # Requirement 11.3: Optimizes state retrieval by session
+    await db.session_states.create_index(
+        [("session_id", ASCENDING)],
+        name="idx_session_states_session",
+        background=True
+    )
+    logger.info("✓ Created index on session_states (session_id)")
+    
+    # ============================================================================
     # IMPORTS COLLECTION INDEXES
     # ============================================================================
     
@@ -275,6 +381,32 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     )
     logger.info("✓ Created index on admin_audit_logs (timestamp)")
     
+    # ============================================================================
+    # TUTOR_RATE_LIMITS COLLECTION INDEXES
+    # ============================================================================
+    
+    # Compound index for rolling window queries
+    # Requirement 11.5: Optimizes counting requests in 24-hour window
+    await db.tutor_rate_limits.create_index(
+        [
+            ("user_id", ASCENDING),
+            ("timestamp", DESCENDING)
+        ],
+        name="idx_tutor_rate_limits_user_timestamp",
+        background=True
+    )
+    logger.info("✓ Created compound index on tutor_rate_limits (user_id, timestamp)")
+    
+    # TTL index for automatic cleanup of old rate limit records
+    # Requirement 11.5: Automatically removes records older than 48 hours
+    await db.tutor_rate_limits.create_index(
+        [("expires_at", ASCENDING)],
+        name="idx_tutor_rate_limits_ttl",
+        expireAfterSeconds=0,  # Expire at the time specified in expires_at field
+        background=True
+    )
+    logger.info("✓ Created TTL index on tutor_rate_limits (expires_at)")
+    
     logger.info("✅ All MongoDB indexes created successfully")
 
 
@@ -292,8 +424,12 @@ async def list_indexes(db: AsyncIOMotorDatabase) -> dict:
         "hint_unlocks",
         "rate_limits",
         "refresh_tokens",
+        "tutor_sessions",
+        "tutor_feedback",
+        "session_states",
         "imports",
-        "admin_audit_logs"
+        "admin_audit_logs",
+        "tutor_rate_limits"
     ]
     
     indexes = {}
