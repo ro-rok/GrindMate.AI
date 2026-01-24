@@ -13,5 +13,6 @@ class UserQuestion(MongoModel):
     time_spent_seconds: int = 0
     hints_unlocked: List[int] = []
     last_attempt_at: Optional[datetime] = None
+    last_attempted_company: Optional[PyObjectId] = None  # NEW: Track company context
 
 

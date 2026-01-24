@@ -10,6 +10,7 @@ import Badge from '../components/ui/Badge';
 import Input from '../components/ui/Input';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import TutorSessionHistory from '../components/tutor/TutorSessionHistory';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
@@ -420,11 +421,20 @@ function Profile() {
           </Card>
         </motion.div>
 
-        {/* Danger Zone */}
+        {/* AI Tutor Session History */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.6 }}
+        >
+          <TutorSessionHistory userId={user?.id} />
+        </motion.div>
+
+        {/* Danger Zone */}
+        <motion.div
+          initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.7 }}
         >
           <Card className="p-6 border-accent-danger">
             <h2 className="text-xl font-semibold text-accent-danger mb-4">Danger Zone</h2>

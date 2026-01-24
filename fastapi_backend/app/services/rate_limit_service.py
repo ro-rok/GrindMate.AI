@@ -5,7 +5,7 @@ Handles token and request tracking per user per day with timezone-aware resets.
 Enforces daily limits (25k tokens, 30 requests) and bypasses for BYOK mode users.
 """
 
-from datetime import datetime, timedelta, date, time
+from datetime import datetime, timedelta, UTC, date, time
 from typing import Dict, Any, Optional, Tuple
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -24,7 +24,7 @@ class RateLimitService:
     DEFAULT_REQUEST_LIMIT = 30
     
     def __init__(self, db: Optional[AsyncIOMotorDatabase] = None):
-        self.db = db or get_database()
+        self.db = db if db is not None else get_database()
     
     async def check_rate_limit(
         self,
@@ -109,7 +109,7 @@ class RateLimitService:
         today_local = now_local.date()
         
         # Calculate expiry (48 hours from now for TTL index)
-        expires_at = datetime.utcnow() + timedelta(days=2)
+        expires_at = datetime.now(UTC) + timedelta(days=2)
         
         # Upsert rate limit record
         result = await self.db["rate_limits"].update_one(
@@ -123,7 +123,7 @@ class RateLimitService:
                     "requests_made": 1
                 },
                 "$setOnInsert": {
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.now(UTC),
                     "expires_at": expires_at
                 }
             },
@@ -276,6 +276,117 @@ class RateLimitService:
                 }
             }
         )
+    
+    # ========================================================================
+    # AI Tutor Rate Limiting (Rolling 24-hour window)
+    # ========================================================================
+    
+    async def check_tutor_rate_limit(
+        self,
+        user_id: str
+    ) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Check if user has exceeded AI tutor rate limits (rolling 24-hour window)
+        
+        Requirements: 6.1, 6.2
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Tuple of (is_allowed, info_dict)
+            - is_allowed: True if request can proceed
+            - info_dict: Contains remaining requests and reset time
+        """
+        # Get user to check premium status
+        user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
+        
+        # Determine limit based on premium status
+        is_premium = user.get("is_premium", False) if user else False
+        request_limit = 200 if is_premium else 50
+        
+        # Calculate 24 hours ago
+        now = datetime.now(UTC)
+        window_start = now - timedelta(hours=24)
+        
+        # Count requests in the rolling 24-hour window
+        # We'll use a separate collection for tutor rate limits
+        request_count = await self.db["tutor_rate_limits"].count_documents({
+            "user_id": ObjectId(user_id),
+            "timestamp": {"$gte": window_start}
+        })
+        
+        requests_remaining = max(0, request_limit - request_count)
+        is_allowed = requests_remaining > 0
+        
+        # Find the oldest request to calculate reset time
+        oldest_request = await self.db["tutor_rate_limits"].find_one(
+            {"user_id": ObjectId(user_id), "timestamp": {"$gte": window_start}},
+            sort=[("timestamp", 1)]
+        )
+        
+        # Reset time is 24 hours after the oldest request
+        if oldest_request:
+            reset_time = oldest_request["timestamp"] + timedelta(hours=24)
+        else:
+            # No requests yet, reset time is 24 hours from now
+            reset_time = now + timedelta(hours=24)
+        
+        return is_allowed, {
+            "requests_remaining": requests_remaining,
+            "request_limit": request_limit,
+            "reset_at": reset_time.isoformat(),
+            "is_premium": is_premium
+        }
+    
+    async def increment_tutor_request_count(
+        self,
+        user_id: str
+    ) -> None:
+        """
+        Increment user's AI tutor request count
+        
+        Requirements: 6.1
+        
+        Args:
+            user_id: User ID
+        """
+        now = datetime.now(UTC)
+        
+        # Store timestamp for rolling window calculation
+        # TTL index will auto-delete after 48 hours
+        await self.db["tutor_rate_limits"].insert_one({
+            "user_id": ObjectId(user_id),
+            "timestamp": now,
+            "expires_at": now + timedelta(hours=48)
+        })
+    
+    async def reset_tutor_rate_limit_if_expired(
+        self,
+        user_id: str
+    ) -> bool:
+        """
+        Check if 24 hours elapsed since first request and clean up old records
+        
+        Requirements: 6.7
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            True if old records were cleaned up, False otherwise
+        """
+        # Calculate 24 hours ago
+        now = datetime.now(UTC)
+        window_start = now - timedelta(hours=24)
+        
+        # Delete requests older than 24 hours
+        result = await self.db["tutor_rate_limits"].delete_many({
+            "user_id": ObjectId(user_id),
+            "timestamp": {"$lt": window_start}
+        })
+        
+        return result.deleted_count > 0
 
 
 # Singleton instance

@@ -12,6 +12,7 @@ import WeakTopicsCard from '../components/dashboard/WeakTopicsCard';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
+import { SmartRandomButton } from '../components/question';
 
 // Register GSAP plugin
 gsap.registerPlugin(ScrollTrigger);
@@ -191,13 +192,18 @@ function Dashboard() {
               </h3>
               <nav aria-label="Quick actions">
                 <div className="space-y-3">
-                  <Button
+                  <SmartRandomButton
                     variant="primary"
                     className="w-full"
+                    showToggle={true}
+                  />
+                  <Button
+                    variant="secondary"
+                    className="w-full"
                     onClick={handleRandomQuestion}
-                    aria-label="Get a random question to solve"
+                    aria-label="Get a random question (legacy)"
                   >
-                    🎲 Random Question
+                    🎲 Random Question (Legacy)
                   </Button>
                   <Button
                     variant="secondary"

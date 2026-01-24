@@ -344,6 +344,45 @@ class SmartRandomService:
         
         return [uq["question_id"] for uq in user_questions]
     
+    async def get_last_practiced_companies(self, user_id: ObjectId, last_n: int = 3) -> List[ObjectId]:
+        """
+        Get companies from last N attempted questions.
+        
+        Requirements: 9.1
+        
+        Args:
+            user_id: User's ObjectId
+            last_n: Number of recent questions to consider (default 3)
+            
+        Returns:
+            List of company ObjectIds from recent attempts
+        """
+        # Get last N user questions ordered by last_attempt_at
+        user_questions = await self.db["user_questions"].find({
+            "user_id": user_id,
+            "last_attempt_at": {"$exists": True}
+        }).sort("last_attempt_at", -1).limit(last_n).to_list(None)
+        
+        if not user_questions:
+            return []
+        
+        # Extract question IDs
+        question_ids = [uq["question_id"] for uq in user_questions]
+        
+        # Get questions to extract company_ids
+        questions = await self.db["questions"].find({
+            "_id": {"$in": question_ids}
+        }).to_list(None)
+        
+        # Extract company_ids (filter out None values)
+        company_ids = []
+        for question in questions:
+            company_id = question.get("company_id")
+            if company_id is not None:
+                company_ids.append(company_id)
+        
+        return company_ids
+    
     async def select_smart_random(
         self,
         user_id: ObjectId,
@@ -436,3 +475,172 @@ class SmartRandomService:
         result["reason"] = selected_score.reason
         
         return result
+    
+    async def select_smart_random_v2(
+        self,
+        user_id: ObjectId,
+        include_solved: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Enhanced smart random with company focus and 7-day cooldown.
+        
+        Requirements: 9.1-9.11
+        
+        Algorithm:
+        1. Get last 3 practiced companies
+        2. Filter questions by those companies
+        3. Exclude solved questions (unless include_solved=True)
+        4. Exclude questions attempted in last 7 days
+        5. Calculate priority scores with weak topic bonus (+3) and recency penalty (-5)
+        6. Limit candidate set to 500 questions
+        7. Sort by score and select from top 20% with weighted random
+        8. Handle tie-breaking with uniform random
+        9. Fallback to truly random if no matches
+        
+        Args:
+            user_id: User's ObjectId
+            include_solved: Whether to include solved questions (default False)
+            
+        Returns:
+            Selected question document with priority_score and selection_reason, or None
+        """
+        from datetime import datetime, timedelta
+        
+        # Step 1: Get last 3 practiced companies (Requirement 9.1)
+        company_ids = await self.get_last_practiced_companies(user_id, last_n=3)
+        
+        # Build base query
+        query = {}
+        
+        # Step 2: Filter by companies (Requirements 9.2, 9.3)
+        if company_ids:
+            # Filter by recent companies
+            query["company_id"] = {"$in": company_ids}
+        else:
+            # Fallback: select from companies that have questions
+            query["company_id"] = {"$ne": None}
+        
+        # Step 3: Exclude solved questions unless include_solved=True (Requirement 9.6)
+        if not include_solved:
+            solved_questions = await self.db["user_questions"].find({
+                "user_id": user_id,
+                "solved": True
+            }).to_list(None)
+            solved_ids = [uq["question_id"] for uq in solved_questions]
+            
+            if solved_ids:
+                query["_id"] = {"$nin": solved_ids}
+        
+        # Step 4: Get questions attempted in last 7 days for exclusion (Requirement 9.5)
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        recent_attempts = await self.db["user_questions"].find({
+            "user_id": user_id,
+            "last_attempt_at": {"$gte": seven_days_ago}
+        }).to_list(None)
+        recent_attempt_ids = [uq["question_id"] for uq in recent_attempts]
+        
+        # Step 6: Limit candidate set to 500 questions (Requirement 9.8)
+        questions = await self.db["questions"].find(query).limit(500).to_list(None)
+        
+        if not questions:
+            # Fallback to truly random if no matches (Requirement 9.11)
+            fallback_query = {}
+            if not include_solved:
+                solved_questions = await self.db["user_questions"].find({
+                    "user_id": user_id,
+                    "solved": True
+                }).to_list(None)
+                solved_ids = [uq["question_id"] for uq in solved_questions]
+                if solved_ids:
+                    fallback_query["_id"] = {"$nin": solved_ids}
+            
+            all_questions = await self.db["questions"].find(fallback_query).to_list(None)
+            if not all_questions:
+                return None
+            
+            selected = random.choice(all_questions)
+            result = dict(selected)
+            result["priority_score"] = 0.0
+            result["selection_reason"] = "Random fallback (no matching criteria)"
+            return result
+        
+        # Get user's weak topics for bonus weighting (Requirement 9.4)
+        weak_patterns = await self.get_weak_patterns(user_id)
+        
+        # Step 5: Calculate priority scores (Requirements 9.4, 9.5, 9.7)
+        scored_questions = []
+        for question in questions:
+            question_id = question["_id"]
+            patterns = question.get("patterns", [])
+            
+            # Base weight (Requirement 9.7)
+            score = 1.0
+            reasons = []
+            
+            # Weak topic bonus: +3 if question contains weak pattern (Requirement 9.4)
+            has_weak_pattern = any(p in weak_patterns for p in patterns)
+            if has_weak_pattern:
+                score += 3.0
+                weak_pattern = next((p for p in patterns if p in weak_patterns), None)
+                if weak_pattern:
+                    reasons.append(f"Weak pattern: {weak_pattern}")
+            
+            # Recency penalty: -5 if attempted in last 7 days (Requirement 9.5)
+            if question_id in recent_attempt_ids:
+                score -= 5.0
+                reasons.append("Recently attempted (penalized)")
+            
+            # Add company context to reason
+            if company_ids and question.get("company_id") in company_ids:
+                # Get company name if possible
+                company_id = question.get("company_id")
+                company = await self.db["companies"].find_one({"_id": company_id})
+                company_name = company.get("name", "Unknown") if company else "Unknown"
+                reasons.append(f"Recent company: {company_name}")
+            
+            reason = ", ".join(reasons) if reasons else "Standard priority"
+            
+            scored_questions.append({
+                "question": question,
+                "score": score,
+                "reason": reason
+            })
+        
+        # Sort by score descending
+        scored_questions.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Step 7: Select from top 20% with weighted random
+        top_20_percent = max(1, len(scored_questions) // 5)
+        top_questions = scored_questions[:top_20_percent]
+        
+        # Step 8: Handle tie-breaking with uniform random (Requirement 9.9)
+        # Group by score for tie-breaking
+        max_score = top_questions[0]["score"]
+        tied_questions = [q for q in top_questions if q["score"] == max_score]
+        
+        if len(tied_questions) > 1:
+            # Multiple questions with same top score - uniform random selection
+            selected = random.choice(tied_questions)
+        else:
+            # Weighted random selection from top 20%
+            # Shift scores to be positive if needed
+            min_score = min(q["score"] for q in top_questions)
+            if min_score < 0:
+                weights = [q["score"] - min_score + 1 for q in top_questions]
+            else:
+                weights = [q["score"] + 1 for q in top_questions]
+            
+            selected = random.choices(top_questions, weights=weights, k=1)[0]
+        
+        # Prepare result
+        result = dict(selected["question"])
+        result["priority_score"] = selected["score"]
+        result["selection_reason"] = selected["reason"]
+        
+        return result
+
+
+# Factory function for dependency injection
+async def get_smart_random_service(db: AsyncIOMotorDatabase) -> SmartRandomService:
+    """Factory function to create SmartRandomService instance"""
+    return SmartRandomService(db)

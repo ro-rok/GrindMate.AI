@@ -10,7 +10,7 @@ from .config import get_settings
 from .db import get_database
 from .models.company import CompanyPublic
 from .models.question import QuestionWithSolved
-from .routers import auth, companies, ping, questions, questions_standalone, users, chats, patterns, tutor, admin
+from .routers import auth, companies, ping, questions, questions_standalone, questions_smart_random, users, chats, patterns, tutor, tutor_v2, admin
 from .routers.admin_errors import register_admin_error_handlers
 from .init_db import create_indexes
 from .middleware import CSRFMiddleware, RateLimitMiddleware
@@ -65,9 +65,11 @@ def create_app() -> FastAPI:
     app.include_router(companies.router)
     app.include_router(questions.router)
     app.include_router(questions_standalone.router)  # Standalone /questions/{id}/solve routes
+    app.include_router(questions_smart_random.router)  # Smart random question selection
     app.include_router(chats.router)
     app.include_router(patterns.router)
     app.include_router(tutor.router)
+    app.include_router(tutor_v2.router)  # Enhanced tutor endpoints
     app.include_router(admin.router)  # Admin routes
 
     @app.get("/health")

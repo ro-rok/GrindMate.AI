@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 from pydantic import BaseModel
 from .common import MongoModel, PyObjectId
@@ -10,7 +10,7 @@ class RefreshToken(MongoModel):
     token_family_id: str  # UUID for rotation detection
     token_hash: str  # Hashed refresh token
     expires_at: datetime
-    created_at: datetime = datetime.utcnow()
+    created_at: datetime = datetime.now(UTC)
     revoked: bool = False
     revoked_at: Optional[datetime] = None
 

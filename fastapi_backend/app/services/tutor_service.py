@@ -7,7 +7,7 @@ Implements caching, rate limiting, and misconception detection.
 
 import json
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 
@@ -39,6 +39,193 @@ class TutorService:
         self.rate_limit_service = get_rate_limit_service(self.db)
         self.encryption_service = get_encryption_service()
         
+    async def build_ai_prompt(
+        self,
+        question_context: Dict[str, Any],
+        user_code: Optional[str],
+        language: Optional[str],
+        message: str,
+        tutor_mode: str,
+        chat_history: List[Dict[str, str]]
+    ) -> List[Dict[str, str]]:
+        """
+        Build structured AI prompt with question context and user attempt.
+        
+        Requirements: 2.2, 2.6, 5.1-5.5
+        
+        Args:
+            question_context: Complete question data from get_question_context
+            user_code: Optional user's current code
+            language: Optional programming language
+            message: User's message
+            tutor_mode: Tutoring mode (socratic, eli5, interview)
+            chat_history: Previous conversation messages
+            
+        Returns:
+            List of messages for Groq API in format:
+            [
+                {"role": "system", "content": "..."},
+                {"role": "user", "content": "..."},
+                {"role": "assistant", "content": "..."},
+                ...
+                {"role": "user", "content": "..."}
+            ]
+        """
+        # Build system prompt based on tutor mode
+        system_prompts = {
+            "socratic": """You are a Socratic tutor for coding problems. Your goal is to guide students to discover solutions themselves through thoughtful questions and hints.
+
+Guidelines:
+- Ask leading questions rather than giving direct answers
+- Break down complex problems into smaller steps
+- Encourage critical thinking and pattern recognition
+- Provide hints progressively, starting with high-level concepts
+- Only reveal solutions when explicitly requested
+- Be encouraging and supportive""",
+            
+            "eli5": """You are a friendly tutor who explains coding concepts in simple, easy-to-understand terms. Your goal is to make complex algorithms accessible to beginners.
+
+Guidelines:
+- Use simple language and everyday analogies
+- Avoid jargon unless you explain it clearly
+- Break down concepts into bite-sized pieces
+- Use concrete examples and visualizations
+- Be patient and encouraging
+- Relate concepts to real-world scenarios""",
+            
+            "interview": """You are an experienced technical interviewer conducting a coding interview. Your goal is to assess the candidate's problem-solving approach and guide them toward optimal solutions.
+
+Guidelines:
+- Ask about their approach before they code
+- Probe for edge cases and complexity analysis
+- Guide them toward optimal solutions if they're stuck
+- Provide feedback on code quality and efficiency
+- Simulate a realistic interview environment
+- Be professional but supportive"""
+        }
+        
+        system_prompt = system_prompts.get(tutor_mode, system_prompts["socratic"])
+        
+        # Add question context to system prompt
+        system_prompt += f"""
+
+Current Problem Context:
+Title: {question_context['title']}
+Difficulty: {question_context['difficulty']}
+Topics: {', '.join(question_context['tags'][:5])}
+Link: {question_context['link']}
+
+Problem Statement:
+{question_context['statement'][:1000]}"""  # Limit to 1000 chars to save tokens
+        
+        if question_context.get('constraints'):
+            system_prompt += f"\n\nConstraints:\n{question_context['constraints'][:500]}"
+        
+        if question_context.get('examples'):
+            system_prompt += f"\n\nExamples:\n{question_context['examples'][:500]}"
+        
+        # Build user message with context
+        user_message = message
+        
+        # Add user code if provided (Requirement 5.1, 5.2)
+        if user_code:
+            code_language = language or "python"
+            user_message += f"\n\nMy current code ({code_language}):\n```{code_language}\n{user_code}\n```"
+        
+        # Build messages array
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add chat history for context continuity (Requirement 2.6)
+        if chat_history:
+            messages.extend(chat_history)
+        
+        # Add current user message
+        messages.append({"role": "user", "content": user_message})
+        
+        return messages
+    
+    async def get_question_context(
+        self,
+        question_id: ObjectId
+    ) -> Dict[str, Any]:
+        """
+        Fetch complete question context for AI injection.
+        
+        Requirements: 2.1, 2.4, 2.5
+        
+        Returns:
+            {
+                "title": str,
+                "slug": str,
+                "difficulty": str,
+                "tags": List[str],
+                "statement": str,
+                "constraints": str,
+                "examples": str,
+                "link": str
+            }
+            
+        Raises:
+            ValueError: If question not found or content unavailable
+        """
+        # Fetch question from database
+        question = await self.db["questions"].find_one({"_id": question_id})
+        
+        if not question:
+            raise ValueError("Question not found")
+        
+        # Extract basic fields
+        title = question.get("title", "")
+        slug = question.get("titleSlug") or question.get("link", "").rstrip("/").split("/")[-1]
+        difficulty = question.get("difficulty", "MEDIUM")
+        link = question.get("link", "")
+        
+        # Extract tags/topics
+        tags = []
+        if question.get("topics"):
+            # Topics might be comma-separated string
+            if isinstance(question["topics"], str):
+                tags = [t.strip() for t in question["topics"].split(",") if t.strip()]
+            elif isinstance(question["topics"], list):
+                tags = question["topics"]
+        
+        # Add patterns as tags
+        if question.get("patterns"):
+            tags.extend(question["patterns"])
+        
+        # Try to get statement from question document
+        statement = question.get("statement") or question.get("description") or ""
+        constraints = question.get("constraints", "")
+        examples = question.get("examples", "")
+        
+        # If statement is missing, attempt fallback to imported content source
+        if not statement:
+            # Try to scrape from LeetCode using the existing chat service function
+            from .chat import scrape_question_text
+            
+            try:
+                scraped_text = await scrape_question_text(link)
+                if scraped_text and scraped_text != "Please paste the question text here.":
+                    statement = scraped_text
+            except Exception:
+                # Scraping failed, continue without statement
+                pass
+        
+        # If still no content, raise error
+        if not statement:
+            raise ValueError("Question content unavailable")
+        
+        return {
+            "title": title,
+            "slug": slug,
+            "difficulty": difficulty,
+            "tags": tags,
+            "statement": statement,
+            "constraints": constraints,
+            "examples": examples,
+            "link": link
+        }
+    
     async def get_unlocked_hints(
         self,
         user_id: str,
@@ -112,7 +299,7 @@ class TutorService:
             user_id=ObjectId(user_id),
             question_id=ObjectId(question_id),
             hint_level=hint_level,
-            unlocked_at=datetime.utcnow()
+            unlocked_at=datetime.now(UTC)
         )
         await self.db["hint_unlocks"].insert_one(unlock.model_dump(by_alias=True))
         
@@ -176,6 +363,147 @@ class TutorService:
             "hint_content": response["content"],
             "tokens_used": response["tokens_used"],
             "cached": False
+        }
+    
+    async def send_chat_message(
+        self,
+        user_id: ObjectId,
+        question_id: ObjectId,
+        message: str,
+        user_code: Optional[str] = None,
+        language: Optional[str] = None,
+        tutor_mode: str = "socratic"
+    ) -> Dict[str, Any]:
+        """
+        Send a chat message to the AI tutor with automatic question context.
+        
+        Requirements: 4.1-4.5, 6.1-6.4
+        
+        Args:
+            user_id: User ID
+            question_id: Question ID
+            message: User's message
+            user_code: Optional code snippet from user
+            language: Optional programming language
+            tutor_mode: Tutoring mode (socratic, eli5, interview)
+            
+        Returns:
+            {
+                "response_text": str,
+                "hints_used_count": int,
+                "session_id": str,
+                "tokens_remaining": int,
+                "requests_remaining": int
+            }
+            
+        Raises:
+            HTTPException: If rate limit exceeded or other errors
+        """
+        # Check rate limit before processing (Requirement 6.1, 6.2)
+        user = await self.db["users"].find_one({"_id": user_id})
+        user_timezone = user.get("timezone", "UTC") if user else "UTC"
+        
+        is_allowed, rate_info = await self.rate_limit_service.check_rate_limit(
+            str(user_id), user_timezone
+        )
+        
+        if not is_allowed:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error_message": f"Rate limit exceeded. You have used all your requests today.",
+                    "reset_time_unix": int(datetime.fromisoformat(rate_info["reset_at"]).timestamp()),
+                    "requests_remaining": rate_info["requests_remaining"]
+                }
+            )
+        
+        # Get question context (Requirement 2.1, 2.4, 2.5)
+        try:
+            question_context = await self.get_question_context(question_id)
+        except ValueError as e:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=404,
+                detail={"error_message": str(e)}
+            )
+        
+        # Get conversation history for context continuity
+        chat_history = await self._get_conversation_history(
+            str(user_id), str(question_id), limit=5
+        )
+        
+        # Build AI prompt with automatic context injection (Requirement 2.2, 2.6)
+        messages = await self.build_ai_prompt(
+            question_context=question_context,
+            user_code=user_code,
+            language=language,
+            message=message,
+            tutor_mode=tutor_mode,
+            chat_history=chat_history
+        )
+        
+        # Call Groq API (Requirement 4.1)
+        try:
+            response = await self._call_groq_api_with_messages(
+                messages=messages,
+                user_id=str(user_id)
+            )
+        except RuntimeError as e:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=502,
+                detail={"error_message": f"AI service error: {str(e)}"}
+            )
+        
+        # Get or create session
+        session_id = await self._get_or_create_session(user_id, question_id, tutor_mode)
+        
+        # Calculate code hash if code provided
+        code_hash = None
+        if user_code:
+            code_hash = hashlib.md5(user_code.encode()).hexdigest()
+        
+        # Store session summary (Requirement 6.4)
+        await self.store_session_summary(
+            user_id=user_id,
+            question_id=question_id,
+            session_id=session_id,
+            prompt_metadata={
+                "tutor_mode": tutor_mode,
+                "language": language,
+                "timestamp": datetime.now(UTC)
+            },
+            ai_summary=response["content"][:500],  # Max 500 characters
+            code_hash=code_hash or ""
+        )
+        
+        # Save chat messages
+        await self._save_chat_messages_with_session(
+            user_id=user_id,
+            question_id=question_id,
+            session_id=session_id,
+            user_message=message,
+            assistant_message=response["content"],
+            tutor_mode=tutor_mode,
+            tokens_used=response["tokens_used"],
+            code_hash=code_hash
+        )
+        
+        # Update session hints count
+        await self._update_session_hints(session_id)
+        
+        # Get updated rate info
+        rate_budget = await self.rate_limit_service.get_rate_budget(
+            str(user_id), user_timezone
+        )
+        
+        return {
+            "response_text": response["content"],
+            "hints_used_count": await self._get_session_hints_count(session_id),
+            "session_id": str(session_id),
+            "tokens_remaining": rate_budget["tokens_remaining"],
+            "requests_remaining": rate_budget["requests_remaining"]
         }
     
     async def chat(
@@ -294,7 +622,7 @@ Guidance for this level:
         # Calculate time spent
         time_spent_minutes = 0
         if user_question and user_question.get("created_at"):
-            time_spent = datetime.utcnow() - user_question["created_at"]
+            time_spent = datetime.now(UTC) - user_question["created_at"]
             time_spent_minutes = int(time_spent.total_seconds() / 60)
         
         # Build code section
@@ -420,6 +748,290 @@ Guidance for this level:
             "tokens_used": tokens_used
         }
     
+    async def _call_groq_api_with_messages(
+        self,
+        messages: List[Dict[str, str]],
+        user_id: str
+    ) -> Dict[str, Any]:
+        """
+        Call Groq API with pre-built messages array.
+        
+        Used by send_chat_message for the new flow.
+        
+        Returns dict with content and tokens_used
+        """
+        # Get user to check for BYOK key
+        user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
+        
+        # Determine which API key to use
+        api_key = None
+        if user and user.get("byok_groq_key"):
+            # Decrypt user's BYOK key
+            encrypted_key = user["byok_groq_key"]
+            api_key = self.encryption_service.decrypt_api_key(encrypted_key)
+            if not api_key:
+                raise RuntimeError("Failed to decrypt BYOK API key")
+        else:
+            # Use server key
+            api_key = self.settings.groq_api_key
+            if not api_key:
+                raise RuntimeError("GROQ_API_KEY is not configured")
+        
+        # Call API
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        body = {
+            "model": "llama3-8b-8192",
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 2048
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                self.settings.groq_api_url,
+                headers=headers,
+                json=body
+            )
+        
+        if response.status_code != 200:
+            raise RuntimeError(f"Groq API error: {response.status_code} - {response.text}")
+        
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        tokens_used = data.get("usage", {}).get("total_tokens", 0)
+        
+        # Update rate limit (only for non-BYOK users)
+        if not (user and user.get("byok_groq_key")):
+            user_timezone = user.get("timezone", "UTC") if user else "UTC"
+            await self.rate_limit_service.consume_budget(
+                user_id, tokens_used, user_timezone
+            )
+        
+        return {
+            "content": content,
+            "tokens_used": tokens_used
+        }
+    
+    async def _get_or_create_session(
+        self,
+        user_id: ObjectId,
+        question_id: ObjectId,
+        tutor_mode: str
+    ) -> ObjectId:
+        """
+        Get existing active session or create a new one.
+        
+        Returns session_id
+        """
+        # Look for active session (no end time)
+        session = await self.db["tutor_sessions"].find_one({
+            "user_id": user_id,
+            "question_id": question_id,
+            "session_end_time": None
+        })
+        
+        if session:
+            return session["_id"]
+        
+        # Create new session
+        from ..models.tutor_session import TutorSession
+        
+        new_session = TutorSession(
+            user_id=user_id,
+            question_id=question_id,
+            session_start_time=datetime.now(UTC),
+            tutor_mode=tutor_mode,
+            hints_used=0,
+            messages_count=0,
+            solved=False,
+            time_spent_seconds=0,
+            final_state="not_started"
+        )
+        
+        result = await self.db["tutor_sessions"].insert_one(
+            new_session.model_dump(by_alias=True)
+        )
+        
+        return result.inserted_id
+    
+    async def _save_chat_messages_with_session(
+        self,
+        user_id: ObjectId,
+        question_id: ObjectId,
+        session_id: ObjectId,
+        user_message: str,
+        assistant_message: str,
+        tutor_mode: str,
+        tokens_used: int,
+        code_hash: Optional[str]
+    ) -> None:
+        """Save chat messages with session linkage"""
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(days=30)  # 30 day TTL
+        
+        # Save user message
+        user_msg = ChatMessage(
+            user_id=user_id,
+            question_id=question_id,
+            session_id=session_id,
+            role="user",
+            content=user_message,
+            tutor_mode=tutor_mode,
+            tokens_used=0,
+            cached=False,
+            code_hash=code_hash,
+            expires_at=expires_at
+        )
+        await self.db["chat_messages"].insert_one(user_msg.model_dump(by_alias=True))
+        
+        # Save assistant message
+        assistant_msg = ChatMessage(
+            user_id=user_id,
+            question_id=question_id,
+            session_id=session_id,
+            role="assistant",
+            content=assistant_message,
+            tutor_mode=tutor_mode,
+            tokens_used=tokens_used,
+            cached=False,
+            code_hash=code_hash,
+            expires_at=expires_at
+        )
+        await self.db["chat_messages"].insert_one(assistant_msg.model_dump(by_alias=True))
+        
+        # Update session message count
+        await self.db["tutor_sessions"].update_one(
+            {"_id": session_id},
+            {"$inc": {"messages_count": 2}}
+        )
+    
+    async def _update_session_hints(self, session_id: ObjectId) -> None:
+        """Increment hints used counter for session"""
+        await self.db["tutor_sessions"].update_one(
+            {"_id": session_id},
+            {"$inc": {"hints_used": 1}}
+        )
+    
+    async def _get_session_hints_count(self, session_id: ObjectId) -> int:
+        """Get current hints count for session"""
+        session = await self.db["tutor_sessions"].find_one({"_id": session_id})
+        return session.get("hints_used", 0) if session else 0
+    
+    async def store_session_summary(
+        self,
+        user_id: ObjectId,
+        question_id: ObjectId,
+        session_id: ObjectId,
+        prompt_metadata: Dict[str, Any],
+        ai_summary: str,
+        code_hash: str
+    ) -> None:
+        """
+        Store sanitized session summary (not full conversation).
+        
+        Requirements: 6.4
+        
+        Stores:
+        - Prompt metadata (question_id, user_id, timestamp, mode)
+        - AI-generated summary (max 500 characters)
+        - Code hash only (not full code)
+        
+        Args:
+            user_id: User ID
+            question_id: Question ID
+            session_id: Session ID
+            prompt_metadata: Dict with tutor_mode, language, timestamp
+            ai_summary: AI-generated summary (will be truncated to 500 chars)
+            code_hash: Hash of user's code (not the full code)
+        """
+        # Truncate summary to 500 characters
+        truncated_summary = ai_summary[:500] if ai_summary else ""
+        
+        # Update session with summary
+        await self.db["tutor_sessions"].update_one(
+            {"_id": session_id},
+            {
+                "$set": {
+                    "ai_summary": truncated_summary,
+                    "updated_at": datetime.now(UTC)
+                }
+            }
+        )
+        
+        # Store metadata in a separate collection for analytics (optional)
+        # This allows us to track usage patterns without storing full conversations
+        await self.db["tutor_session_metadata"].update_one(
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "question_id": question_id
+            },
+            {
+                "$set": {
+                    "tutor_mode": prompt_metadata.get("tutor_mode", "socratic"),
+                    "language": prompt_metadata.get("language"),
+                    "timestamp": prompt_metadata.get("timestamp", datetime.now(UTC)),
+                    "code_hash": code_hash,
+                    "summary": truncated_summary,
+                    "updated_at": datetime.now(UTC)
+                },
+                "$setOnInsert": {
+                    "created_at": datetime.now(UTC)
+                }
+            },
+            upsert=True
+        )
+    
+    async def reset_tutor_conversation(
+        self,
+        user_id: ObjectId,
+        question_id: ObjectId
+    ) -> None:
+        """
+        Clear conversation history for current question.
+        
+        Requirements: 6.5
+        
+        Clears:
+        - All chat messages for user + question pair
+        - Session summary
+        
+        Args:
+            user_id: User ID
+            question_id: Question ID
+        """
+        # Delete all chat messages for this user-question pair
+        await self.db["chat_messages"].delete_many({
+            "user_id": user_id,
+            "question_id": question_id
+        })
+        
+        # Clear session summary for active session
+        await self.db["tutor_sessions"].update_many(
+            {
+                "user_id": user_id,
+                "question_id": question_id,
+                "session_end_time": None  # Only active sessions
+            },
+            {
+                "$set": {
+                    "ai_summary": None,
+                    "messages_count": 0,
+                    "updated_at": datetime.now(UTC)
+                }
+            }
+        )
+        
+        # Clear session metadata
+        await self.db["tutor_session_metadata"].delete_many({
+            "user_id": user_id,
+            "question_id": question_id
+        })
+    
     async def _check_rate_limit(self, user_id: str) -> None:
         """
         Check if user has exceeded rate limit
@@ -493,7 +1105,7 @@ Guidance for this level:
         tokens_used: int
     ) -> None:
         """Save chat messages to database"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         expires_at = now + timedelta(days=30)  # 30 day TTL
         
         # Save user message
@@ -538,7 +1150,7 @@ Guidance for this level:
         # Look for cached hint in chat_messages
         cached = await self.db["chat_messages"].find_one({
             "cached": True,
-            "expires_at": {"$gt": datetime.utcnow()}
+            "expires_at": {"$gt": datetime.now(UTC)}
         })
         
         return cached
@@ -579,7 +1191,7 @@ Guidance for this level:
     ) -> None:
         """Cache hint response"""
         # Save as chat message with hint_level set
-        expires_at = datetime.utcnow() + timedelta(hours=24)
+        expires_at = datetime.now(UTC) + timedelta(hours=24)
         
         hint_msg = ChatMessage(
             user_id=ObjectId(user_id),
@@ -609,7 +1221,7 @@ Guidance for this level:
         
         Requirements: 11.1
         """
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         
         await self.db["user_questions"].update_one(
             {

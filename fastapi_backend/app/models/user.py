@@ -32,6 +32,7 @@ class UserPublic(MongoModel):
     rate_budget_requests: int = 30
     rate_budget_reset_at: Optional[datetime] = None
     tutor_mode: str = "socratic"
+    is_premium: bool = False
     preferences: UserPreferences = UserPreferences()
 
 
@@ -49,6 +50,7 @@ class UserInDB(MongoModel):
     rate_budget_reset_at: Optional[datetime] = None
     byok_groq_key: Optional[str] = None
     tutor_mode: str = "socratic"
+    is_premium: bool = False
     preferences: Dict[str, Any] = {"reduced_motion": False, "theme": "dark"}
 
 
