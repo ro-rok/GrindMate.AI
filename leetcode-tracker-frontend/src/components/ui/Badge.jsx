@@ -8,23 +8,23 @@ const Badge = ({
   size = 'md',
   className = ''
 }) => {
-  const baseStyles = 'inline-flex items-center font-medium rounded-full';
+  const baseStyles = 'inline-flex items-center font-medium rounded-full border';
 
   const variantStyles = {
-    default: 'bg-gray-800 text-gray-300',
-    easy: 'bg-green-900/30 text-green-400 border border-green-800',
-    medium: 'bg-yellow-900/30 text-yellow-400 border border-yellow-800',
-    hard: 'bg-red-900/30 text-red-400 border border-red-800',
-    primary: 'bg-accent-primary/20 text-accent-primary border border-accent-primary/30',
-    success: 'bg-accent-success/20 text-accent-success border border-accent-success/30',
-    warning: 'bg-accent-warning/20 text-accent-warning border border-accent-warning/30',
-    danger: 'bg-accent-danger/20 text-accent-danger border border-accent-danger/30'
+    default: 'bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border-[var(--border-subtle)]',
+    easy: 'bg-[var(--accent-success-light)] text-[var(--accent-success)] border-[var(--border-success)]',
+    medium: 'bg-[var(--accent-warning-light)] text-[var(--accent-warning)] border-[var(--border-warning)]',
+    hard: 'bg-[var(--accent-danger-light)] text-[var(--accent-danger)] border-[var(--border-danger)]',
+    primary: 'bg-[var(--accent-primary-light)] text-[var(--accent-primary)] border-[var(--border-brand)]',
+    success: 'bg-[var(--accent-success-light)] text-[var(--accent-success)] border-[var(--border-success)]',
+    warning: 'bg-[var(--accent-warning-light)] text-[var(--accent-warning)] border-[var(--border-warning)]',
+    danger: 'bg-[var(--accent-danger-light)] text-[var(--accent-danger)] border-[var(--border-danger)]'
   };
 
   const sizeStyles = {
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-2.5 py-1 text-sm',
-    lg: 'px-3 py-1.5 text-base'
+    sm: 'px-[var(--space-2)] py-[var(--space-0_5)] text-xs',
+    md: 'px-[var(--space-2_5)] py-[var(--space-1)] text-sm',
+    lg: 'px-[var(--space-3)] py-[var(--space-1_5)] text-base'
   };
   
   // Add tier variants

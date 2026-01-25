@@ -248,7 +248,7 @@ async def solve_question(
 
     return SolveResponse(
         solved=True,
-        question_id=question_id,
+        question_id=str(question_obj_id),
         streak_updated=streak_info["streak_updated"],
         new_streak=streak_info["new_streak"],
         milestone_reached=streak_info["milestone_reached"]
@@ -314,7 +314,7 @@ async def unsolve_question(
             timezone=user_timezone
         )
 
-    return {"solved": False, "question_id": question_id}
+    return {"solved": False, "question_id": str(question_obj_id)}
 
 
 @router.get("/{question_id}/content")

@@ -35,8 +35,13 @@ function TutorFeedbackModal({ isOpen, onClose, sessionId, questionTitle }) {
 
     setIsSubmitting(true);
 
+    if (!sessionId) {
+      toast.error('Session ID is missing. Cannot submit feedback.');
+      return;
+    }
+
     try {
-      // Call /api/tutor/feedback endpoint (Requirement 8.3, 8.4)
+      // Call /tutor/feedback endpoint (Requirement 8.3, 8.4)
       const response = await api.post('/tutor/feedback', {
         session_id: sessionId,
         rating: rating,
@@ -57,7 +62,31 @@ function TutorFeedbackModal({ isOpen, onClose, sessionId, questionTitle }) {
       onClose();
     } catch (err) {
       console.error('Failed to submit feedback:', err);
-      const errorMessage = err.response?.data?.error_message || 'Failed to submit feedback';
+      
+      // Enhanced error handling
+      let errorMessage = 'Failed to submit feedback';
+      
+      if (err.response) {
+        // Backend returned an error
+        const errorData = err.response.data;
+        if (errorData?.detail) {
+          // FastAPI error detail can be string or dict
+          if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.detail?.error_message) {
+            errorMessage = errorData.detail.error_message;
+          } else if (typeof errorData.detail === 'object') {
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        } else if (errorData?.error_message) {
+          errorMessage = errorData.error_message;
+        } else if (errorData?.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);

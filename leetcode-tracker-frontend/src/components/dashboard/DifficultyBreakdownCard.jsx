@@ -11,7 +11,8 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
  */
 const DifficultyBreakdownCard = ({ 
   difficultyBreakdown = { EASY: 0, MEDIUM: 0, HARD: 0 },
-  isDemo = false
+  isDemo = false,
+  cardVariant = 'matte'
 }) => {
   const prefersReducedMotion = useReducedMotion();
 
@@ -45,7 +46,7 @@ const DifficultyBreakdownCard = ({
   const totalSolved = Object.values(difficultyBreakdown).reduce((sum, count) => sum + count, 0);
 
   return (
-    <Card className="p-6 relative">
+    <Card variant={cardVariant} className="p-6 relative">
       {/* Demo mode badge */}
       {isDemo && (
         <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">

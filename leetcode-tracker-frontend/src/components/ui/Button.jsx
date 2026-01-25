@@ -3,8 +3,8 @@ import { motion } from 'framer-motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 /**
- * Button component with variants and loading states
- * Supports primary, secondary, ghost, and danger variants
+ * Button component with consistent variants, sizes, and focus ring glow
+ * Premium button with subtle motion and proper accessibility
  */
 const Button = forwardRef(({
   children,
@@ -20,20 +20,20 @@ const Button = forwardRef(({
 }, ref) => {
   const prefersReducedMotion = useReducedMotion();
 
-  const baseStyles = 'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black-base disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'inline-flex items-center justify-center font-medium transition-all duration-[var(--duration-fast)] focus:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:opacity-50 disabled:cursor-not-allowed relative';
 
   const variantStyles = {
-    primary: 'bg-accent-primary text-white hover:bg-accent-primary-hover focus:ring-accent-primary',
-    secondary: 'bg-black-elevated text-text-primary hover:bg-black-elevated-hover border border-border-subtle focus:ring-accent-primary',
-    ghost: 'text-text-primary hover:bg-black-elevated focus:ring-accent-primary',
-    danger: 'bg-accent-danger text-white hover:bg-red-600 focus:ring-accent-danger',
-    success: 'bg-accent-success text-white hover:bg-green-600 focus:ring-accent-success'
+    primary: 'bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)] focus-visible:shadow-[var(--glow-brand)]',
+    secondary: 'bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)] border border-[var(--border-default)] focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)]',
+    ghost: 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)]',
+    danger: 'bg-[var(--accent-danger)] text-white hover:bg-[var(--accent-danger-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-danger)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)]',
+    success: 'bg-[var(--accent-success)] text-white hover:bg-[var(--accent-success-hover)] focus-visible:ring-2 focus-visible:ring-[var(--accent-success)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-base)]'
   };
 
   const sizeStyles = {
-    sm: 'px-3 py-1.5 text-sm rounded-md',
-    md: 'px-4 py-2 text-base rounded-lg',
-    lg: 'px-6 py-3 text-lg rounded-xl'
+    sm: 'px-[var(--space-3)] py-[var(--space-1_5)] text-sm rounded-[var(--radius-sm)] gap-[var(--space-1_5)]',
+    md: 'px-[var(--space-4)] py-[var(--space-2)] text-base rounded-[var(--radius-md)] gap-[var(--space-2)]',
+    lg: 'px-[var(--space-6)] py-[var(--space-3)] text-lg rounded-[var(--radius-lg)] gap-[var(--space-2_5)]'
   };
 
   const combinedClassName = `${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`;
@@ -41,9 +41,14 @@ const Button = forwardRef(({
   const MotionButton = prefersReducedMotion ? 'button' : motion.button;
 
   const motionProps = prefersReducedMotion ? {} : {
-    whileHover: disabled || loading ? {} : { scale: 1.02 },
-    whileTap: disabled || loading ? {} : { scale: 0.98 },
-    transition: { duration: 0.15 }
+    whileHover: disabled || loading ? {} : { 
+      scale: 1.01,
+      transition: { duration: 0.15 }
+    },
+    whileTap: disabled || loading ? {} : { 
+      scale: 0.98,
+      transition: { duration: 0.1 }
+    }
   };
 
   return (
@@ -61,7 +66,7 @@ const Button = forwardRef(({
     >
       {loading && (
         <svg
-          className="animate-spin -ml-1 mr-2 h-4 w-4"
+          className="animate-spin h-4 w-4"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"

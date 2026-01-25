@@ -3,46 +3,46 @@
  * Defines tiers and priority scores for companies
  */
 
-export type CompanyTier = 'S' | 'A' | 'Quant' | 'India' | 'Low';
+export type CompanyTier = 'S' | 'A' | 'Quant' | 'India' | 'B' | 'C';
 
 export interface CompanyPriority {
   tier: CompanyTier;
   score: number;
 }
 
-// Tier S: Top tech companies
+// Tier S: Top tech companies (10 companies)
 const TIER_S_COMPANIES = [
-  'Google', 'Meta', 'Facebook', 'Amazon', 'Microsoft', 'Apple', 'Netflix',
-  'OpenAI', 'Nvidia', 'Tesla', 'Uber', 'Airbnb', 'Stripe', 'Atlassian',
-  'Oracle', 'Adobe'
+  'Google', 'Meta', 'Amazon', 'Microsoft', 'Apple', 'Netflix',
+  'OpenAI', 'Uber', 'Stripe', 'Databricks', 'Snowflake'
 ];
 
-// Tier A: Strong tech companies
+// Tier A: Strong tech companies (10 companies)
 const TIER_A_COMPANIES = [
-  'Bloomberg', 'Databricks', 'Snowflake', 'Coinbase', 'DoorDash', 'LinkedIn',
-  'Shopify', 'Twilio', 'ServiceNow', 'Cloudflare', 'Datadog', 'Okta',
-  'Salesforce', 'Expedia', 'Booking.com', 'Palantir'
+  'Atlassian', 'Salesforce', 'Palantir', 'Coinbase', 'DoorDash', 'Airbnb',
+  'LinkedIn', 'Nvidia', 'Oracle', 'Walmart Labs'
 ];
 
-// Quant: Quantitative trading firms
+// Quant: Quantitative trading firms (9 companies)
 const TIER_QUANT_COMPANIES = [
-  'Jane Street', 'Citadel', 'Two Sigma', 'IMC', 'Hudson River Trading',
-  'Jump Trading', 'DRW', 'Optiver', 'Akuna Capital', 'Tower Research',
-  'DE Shaw', 'WorldQuant', 'Point72', 'Millennium', 'Squarepoint'
+  'Jane Street', 'Citadel', 'Hudson River Trading', 'Two Sigma', 'Jump Trading',
+  'DRW', 'IMC', 'Optiver', 'AQR'
 ];
 
-// India Product: Indian product companies
+// India Product: Indian product companies (10 companies)
 const TIER_INDIA_COMPANIES = [
   'Flipkart', 'Swiggy', 'Zomato', 'Razorpay', 'PhonePe', 'Paytm', 'Meesho',
-  'CRED', 'Groww', 'Zepto', 'Blinkit', 'Delhivery', 'FreshWorks', 'Dream11',
-  'Oyo'
+  'CRED', 'Zerodha', 'Myntra'
 ];
 
-// Low Priority: Service companies (still searchable)
-const LOW_PRIORITY_COMPANIES = [
-  'Accenture', 'TCS', 'Wipro', 'Infosys', 'Cognizant', 'Capgemini',
-  'Deloitte', 'EY', 'PwC', 'KPMG'
+// Tier B: Strong but not "top" companies
+const TIER_B_COMPANIES = [
+  'Intuit', 'LinkedIn', 'Booking.com', 'Expedia', 'DoorDash', 'Walmart Labs',
+  'SAP', 'ServiceNow', 'Workday', 'Okta', 'Visa', 'Mastercard', 'PayPal',
+  'Bloomberg', 'Arista', 'Confluent', 'Datadog', 'CrowdStrike'
 ];
+
+// Tier C: Everything else (default fallback)
+// No explicit list - everything not in S/A/Quant/India/B falls into C
 
 // Create a map for quick lookup
 const companyTierMap = new Map<string, CompanyPriority>();
@@ -67,9 +67,9 @@ TIER_INDIA_COMPANIES.forEach(company => {
   companyTierMap.set(company.toLowerCase(), { tier: 'India', score: 60 });
 });
 
-// Add Low Priority companies
-LOW_PRIORITY_COMPANIES.forEach(company => {
-  companyTierMap.set(company.toLowerCase(), { tier: 'Low', score: 30 });
+// Add Tier B companies
+TIER_B_COMPANIES.forEach(company => {
+  companyTierMap.set(company.toLowerCase(), { tier: 'B', score: 50 });
 });
 
 /**
@@ -93,8 +93,10 @@ export function getCompaniesByTier(tier: CompanyTier): string[] {
       return TIER_QUANT_COMPANIES;
     case 'India':
       return TIER_INDIA_COMPANIES;
-    case 'Low':
-      return LOW_PRIORITY_COMPANIES;
+    case 'B':
+      return TIER_B_COMPANIES;
+    case 'C':
+      return []; // Tier C is everything else, no explicit list
     default:
       return [];
   }
@@ -183,11 +185,12 @@ export function getIndiaProductCompanies(companies: Array<{ name: string; [key: 
  */
 export function sortCompaniesByTier(companies: Array<{ name: string; [key: string]: any }>): Array<{ name: string; [key: string]: any }> {
   const tierOrder: Record<CompanyTier, number> = {
-    'S': 5,
-    'A': 4,
-    'Quant': 3,
-    'India': 2,
-    'Low': 1,
+    'S': 6,
+    'A': 5,
+    'Quant': 4,
+    'India': 3,
+    'B': 2,
+    'C': 1,
   };
   
   return [...companies].sort((a, b) => {

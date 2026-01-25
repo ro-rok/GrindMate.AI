@@ -14,7 +14,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
-import LoaderTerminal from '../components/LoaderTerminal';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { getQuestionIdentifier } from '../utils/slugify';
 import api from '../api';
@@ -190,6 +190,7 @@ function QuestionList() {
     }
 
     setIsPopulating(true);
+    toast.info('Populating questions... This may take a moment.', { duration: 3000 });
     try {
       await api.post(`/companies/${companyId}/refresh`);
       toast.success('Import started! Refreshing questions...');
@@ -241,11 +242,14 @@ function QuestionList() {
       return;
     }
     
-    // Open LeetCode link
-    window.open(question.link, '_blank');
+    // Open LeetCode in new tab if URL exists
+    const leetcodeUrl = question.leetcode_url || question.link;
+    if (leetcodeUrl) {
+      window.open(leetcodeUrl, '_blank');
+    }
     
-    // Show action modal to ask what user wants to do
-    setActionModalQuestion(question);
+    // Navigate to Focus Mode
+    navigate(`/focus/${getQuestionIdentifier(question)}`);
   };
 
   // Handle action from modal
@@ -333,14 +337,18 @@ function QuestionList() {
   };
 
   if (!company && !error) {
-    return <LoaderTerminal />;
+    return (
+      <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center p-[var(--space-8)]">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
   }
 
   if (error && !company) {
     return (
-      <div className="min-h-screen bg-black-base flex items-center justify-center p-8">
+      <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center p-[var(--space-8)]">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-text-primary mb-4">
+          <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-[var(--space-4)]">
             Failed to Load Company
           </h2>
           <p className="text-text-secondary mb-6">{error}</p>
@@ -365,37 +373,59 @@ function QuestionList() {
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Compact Header */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-8"
+          className="mb-[var(--space-4)]"
         >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <button
-                onClick={() => navigate('/companies')}
-                className="text-text-tertiary hover:text-text-primary transition-colors mb-2"
-              >
-                ← Back to Companies
-              </button>
-              <h1 className="text-4xl font-bold text-text-primary">
-                {company?.name || company?.id || 'Company Questions'}
-              </h1>
-              {!company?.name && company?.id && (
-                <p className="text-sm text-yellow-500 mt-1">
-                  ⚠️ Company name not found (ID: {company.id})
-                </p>
+          <button
+            onClick={() => navigate('/companies')}
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors mb-[var(--space-2)] text-sm block"
+          >
+            ← Back to Companies
+          </button>
+          
+          <div className="flex items-center justify-between gap-[var(--space-4)] flex-wrap">
+            <div className="flex items-center gap-[var(--space-4)] flex-wrap">
+              {/* Company Name */}
+              <div className="flex items-center gap-[var(--space-3)]">
+                <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
+                  {company?.name || company?.id || 'Company Questions'}
+                </h1>
+                {company?.question_count !== undefined && (
+                  <span className="text-sm text-[var(--text-secondary)]">
+                    {company.question_count} questions
+                  </span>
+                )}
+              </div>
+
+              {/* Updated Section */}
+              {updateMonths.length > 0 && (
+                <div className="flex items-center gap-[var(--space-2)]">
+                  <span className="text-[var(--text-tertiary)] text-xs font-medium">Updated:</span>
+                  {updateMonths.map((month, index) => (
+                    <Button
+                      key={month}
+                      variant={activeMonth === month ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => setActiveMonth(month)}
+                    >
+                      {index === 0 ? 'Latest' : month}
+                    </Button>
+                  ))}
+                </div>
               )}
             </div>
             
-            {/* Populate Button */}
+            {/* Populate Button - Right Aligned */}
             <Button
               variant="warning"
+              size="md"
               onClick={handlePopulate}
               disabled={isPopulating}
-              className="font-bold"
+              className="font-semibold"
             >
               {isPopulating ? 'Populating...' : 'Populate'}
             </Button>
@@ -407,36 +437,22 @@ function QuestionList() {
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="sticky top-0 z-10 bg-black-base/95 backdrop-blur-sm border-b border-border-soft pb-4 mb-6 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-4"
+          className="sticky top-0 z-10 bg-[var(--bg-base)]/95 backdrop-blur-sm border-b border-[var(--border-subtle)] py-[var(--space-3)] mb-[var(--space-4)]"
         >
-          {/* Update Months (if available) */}
-          {updateMonths.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-text-tertiary text-sm font-medium">Last Updated:</span>
-              {updateMonths.map((month, index) => (
-                <Button
-                  key={month}
-                  variant={activeMonth === month ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={() => setActiveMonth(month)}
-                >
-                  {index === 0 ? 'Latest' : month}
-                </Button>
-              ))}
+          {/* Compact Filter Row - Left Aligned */}
+          <div className="flex items-center gap-[var(--space-4)] flex-wrap">
+            {/* Filters - Left Aligned */}
+            <div className="flex-1 min-w-0">
+              <QuestionFilters
+                filters={filters}
+                onChange={handleFilterChange}
+                questionCount={displayedQuestions.length}
+                availableTopics={availableTopics}
+              />
             </div>
-          )}
-
-          {/* Consolidated Filters */}
-          <div className="space-y-4">
-            <QuestionFilters
-              filters={filters}
-              onChange={handleFilterChange}
-              questionCount={displayedQuestions.length}
-              availableTopics={availableTopics}
-            />
             
             {/* Random Question Button */}
-            <div className="flex items-center gap-3 pt-2 border-t border-border-soft">
+            <div className="flex-shrink-0">
               <Button
                 variant="primary"
                 size="sm"
@@ -445,16 +461,6 @@ function QuestionList() {
               >
                 🎲 Random Question
               </Button>
-              {randomQuestion && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setRandomQuestion(null)}
-                  className="text-text-tertiary"
-                >
-                  Clear
-                </Button>
-              )}
             </div>
           </div>
         </motion.div>
@@ -465,26 +471,28 @@ function QuestionList() {
             initial={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="mb-6"
+            className="mb-[var(--space-4)]"
           >
-            <Card className="p-6 bg-gradient-to-r from-accent-primary/10 to-accent-secondary/10 border-accent-primary/30">
-              <div className="flex items-start justify-between mb-4">
+            <Card className="p-[var(--space-4)] bg-gradient-to-r from-[var(--accent-primary-light)] to-[var(--accent-secondary)]/10 border-[var(--border-brand)]">
+              <div className="flex items-start justify-between mb-[var(--space-3)]">
                 <div>
-                  <h3 className="text-xl font-bold text-text-primary mb-2">
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-[var(--space-1)]">
                     🎲 Random Question
                   </h3>
-                  <p className="text-lg text-text-secondary">{randomQuestion.title}</p>
+                  <p className="text-base text-[var(--text-secondary)]">{randomQuestion.title}</p>
                 </div>
                 <button
                   onClick={() => setRandomQuestion(null)}
-                  className="text-text-tertiary hover:text-text-primary"
+                  className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors p-[var(--space-1)] rounded-[var(--radius-sm)] hover:bg-[var(--bg-surface-2)]"
+                  aria-label="Close random question"
                 >
                   ✕
                 </button>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-[var(--space-2)]">
                 <Button
                   variant="primary"
+                  size="sm"
                   onClick={() => handleQuestionClick(randomQuestion)}
                 >
                   Solve
@@ -492,6 +500,7 @@ function QuestionList() {
                 {randomQuestion.solved && (
                   <Button
                     variant="secondary"
+                    size="sm"
                     onClick={() => handleMarkSolved(randomQuestion.id, false)}
                   >
                     Mark Unsolved
@@ -502,36 +511,28 @@ function QuestionList() {
           </motion.div>
         )}
 
-        {/* Action Bar */}
-        <motion.div
-          initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="flex items-center justify-between mb-6"
-        >
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={handleGetRandom}>
-              🎲 Random Question
-            </Button>
-          </div>
-
-          {isAuthenticated && displayedQuestions.length > 0 && (
-            <div className="flex items-center gap-4">
-              <div className="text-text-secondary text-sm">
-                Solved <span className="font-semibold text-accent-success">{solvedCount}</span> out of{' '}
-                <span className="font-semibold text-accent-primary">{displayedQuestions.length}</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleResetProgress}
-                className="text-accent-danger hover:text-accent-danger"
-              >
-                Reset Progress
-              </Button>
+        {/* Action Bar - Compact */}
+        {isAuthenticated && displayedQuestions.length > 0 && (
+          <motion.div
+            initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="flex items-center justify-between mb-6"
+          >
+            <div className="text-[var(--text-secondary)] text-sm">
+              Solved <span className="font-semibold text-[var(--accent-success)]">{solvedCount}</span> out of{' '}
+              <span className="font-semibold text-[var(--accent-primary)]">{displayedQuestions.length}</span>
             </div>
-          )}
-        </motion.div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleResetProgress}
+              className="text-[var(--accent-danger)] hover:text-[var(--accent-danger-hover)]"
+            >
+              Reset Progress
+            </Button>
+          </motion.div>
+        )}
 
         {/* Guest notice */}
         {!isAuthenticated && (
@@ -539,9 +540,9 @@ function QuestionList() {
             initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
-            className="mb-6 p-3 bg-accent-primary/10 border border-accent-primary/20 rounded-lg"
+            className="mb-[var(--space-4)] p-[var(--space-3)] bg-[var(--accent-primary-light)] border border-[var(--border-brand)] rounded-[var(--radius-md)]"
           >
-            <p className="text-accent-primary text-sm mb-2">
+            <p className="text-[var(--accent-primary)] text-sm mb-[var(--space-2)]">
               💡 Sign up to track your progress and unlock personalized features!
             </p>
             <Button
@@ -557,7 +558,7 @@ function QuestionList() {
         {/* Loading state */}
         {isLoading && (
           <div className="flex justify-center py-20">
-            <LoaderTerminal />
+            <LoadingSpinner size="lg" />
           </div>
         )}
 
@@ -570,7 +571,7 @@ function QuestionList() {
             className="text-center py-20"
           >
             <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-2xl font-semibold text-text-primary mb-2">
+            <h3 className="text-2xl font-semibold text-[var(--text-primary)] mb-[var(--space-2)]">
               No Questions Found
             </h3>
             <p className="text-text-secondary mb-6">
@@ -597,13 +598,13 @@ function QuestionList() {
         {/* View Toggle */}
         {!isLoading && displayedQuestions.length > 0 && (
           <div className="flex items-center justify-end gap-2 mb-4">
-            <div className="flex items-center gap-1 bg-black-elevated border border-border-soft rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] p-1">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                className={`px-3 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-all duration-[var(--duration-fast)] ${
                   viewMode === 'list'
-                    ? 'bg-accent-primary text-white'
-                    : 'text-text-secondary hover:text-text-primary'
+                    ? 'bg-[var(--accent-primary)] text-white shadow-[var(--elevation-1)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]'
                 }`}
                 aria-label="List view"
               >
@@ -611,10 +612,10 @@ function QuestionList() {
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+                className={`px-3 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-all duration-[var(--duration-fast)] ${
                   viewMode === 'grid'
-                    ? 'bg-accent-primary text-white'
-                    : 'text-text-secondary hover:text-text-primary'
+                    ? 'bg-[var(--accent-primary)] text-white shadow-[var(--elevation-1)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]'
                 }`}
                 aria-label="Grid view"
               >
@@ -638,13 +639,25 @@ function QuestionList() {
                 <QuestionListView
                   questions={displayedQuestions}
                   onQuestionClick={handleQuestionClick}
-                  onStart={(question) => navigate(`/focus/${getQuestionIdentifier(question)}`)}
+                  onStart={(question) => {
+                    // Open LeetCode in new tab if URL exists
+                    if (question.leetcode_url) {
+                      window.open(question.leetcode_url, '_blank');
+                    }
+                    // Navigate to Focus Mode
+                    navigate(`/focus/${getQuestionIdentifier(question)}`);
+                  }}
                   onAskAI={(question) => {
                     navigate(`/focus/${getQuestionIdentifier(question)}`);
                     // Focus mode will open AI tutor tab
                   }}
                   onMarkSolved={(question, solved) => handleMarkSolved(question.id, solved)}
                   onStar={() => {}}
+                  onOpenLeetCode={(question) => {
+                    if (question.leetcode_url) {
+                      window.open(question.leetcode_url, '_blank');
+                    }
+                  }}
                   isLoading={false}
                 />
               </motion.div>

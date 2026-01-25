@@ -107,16 +107,16 @@ function Analytics() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] p-8">
+    <div className="min-h-screen bg-[var(--bg-base)] p-4 sm:p-6 lg:p-8">
       <motion.div
         initial={prefersReducedMotion ? {} : "initial"}
         animate="animate"
         variants={motionVariants.fadeInUp}
         transition={motionTransitions.normal}
       >
-        <header>
-          <h1 className="text-4xl font-bold text-white mb-2">Analytics</h1>
-          <p className="text-gray-400 mb-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">Analytics</h1>
+          <p className="text-base text-[var(--text-secondary)]">
             Track your progress and identify areas for improvement
           </p>
         </header>
@@ -124,34 +124,36 @@ function Analytics() {
         {/* Anonymous user CTA */}
         {!isAuthenticated && (
           <motion.div
-            className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg"
+            className="mb-6 p-4 bg-[var(--accent-primary-light)] border border-[var(--border-brand)] rounded-[var(--radius-lg)]"
             initial={prefersReducedMotion ? {} : { opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.2 }}
             role="alert"
           >
-            <p className="text-blue-400 mb-2">
+            <p className="text-[var(--accent-primary)] mb-3 text-sm">
               You're viewing demo analytics. Sign up to track your real progress!
             </p>
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => navigate('/login')}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-[#0a0a0a]"
               aria-label="Sign up or login to track your progress"
             >
               Sign Up / Login
-            </button>
+            </Button>
           </motion.div>
         )}
       </motion.div>
 
       {/* Analytics cards grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" role="region" aria-label="Analytics dashboard">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" role="region" aria-label="Analytics dashboard">
         <div ref={(el) => (cardsRef.current[0] = el)}>
           <StreakCard
             currentStreak={streak?.current_streak || 0}
             longestStreak={streak?.longest_streak || 0}
             calendarHeatmap={analytics?.heatmap || []}
             isDemo={!isAuthenticated}
+            cardVariant="glass"
           />
         </div>
 
@@ -159,6 +161,7 @@ function Analytics() {
           <DifficultyBreakdownCard
             difficultyBreakdown={analytics?.difficulty_breakdown || { EASY: 0, MEDIUM: 0, HARD: 0 }}
             isDemo={!isAuthenticated}
+            cardVariant="glass"
           />
         </div>
 
@@ -166,6 +169,7 @@ function Analytics() {
           <CalendarHeatmapCard
             heatmapData={analytics?.heatmap || []}
             isDemo={!isAuthenticated}
+            cardVariant="glass"
           />
         </div>
 
@@ -174,6 +178,7 @@ function Analytics() {
             weakTopics={analytics?.weak_topics || []}
             onTopicClick={handleTopicClick}
             isDemo={!isAuthenticated}
+            cardVariant="glass"
           />
         </div>
       </div>

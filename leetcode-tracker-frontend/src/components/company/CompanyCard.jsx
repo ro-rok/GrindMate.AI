@@ -1,8 +1,10 @@
 import { motion } from 'framer-motion';
-import { FaBuilding, FaChevronRight, FaCheck } from 'react-icons/fa';
+import { format } from 'date-fns';
+import { FaStar, FaChevronRight, FaCheck } from 'react-icons/fa';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
-import Pill from '../ui/Pill';
+import IconButton from '../ui/IconButton';
+import Tooltip from '../ui/Tooltip';
 import { getCompanyTier } from '../../data/companyPriority';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -18,24 +20,6 @@ const CompanyCard = ({ company, onClick, index = 0, isFavorite = false, onToggle
 
   const MotionDiv = prefersReducedMotion ? 'div' : motion.div;
 
-  const hoverAnimation = prefersReducedMotion ? {} : {
-    scale: 1.03,
-    boxShadow: '0 0 30px rgba(14, 165, 233, 0.4)',
-  };
-
-  const itemVariants = prefersReducedMotion ? {} : {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        type: 'spring',
-        damping: 25,
-        stiffness: 300,
-      }
-    }
-  };
-
   const handleKeyDown = (e) => {
     // Handle Enter and Space keys for accessibility
     if (e.key === 'Enter' || e.key === ' ') {
@@ -44,11 +28,28 @@ const CompanyCard = ({ company, onClick, index = 0, isFavorite = false, onToggle
     }
   };
 
+  const tier = getCompanyTier(company.name);
+  const tierVariantMap = {
+    'S': 'tierS',
+    'A': 'tierA',
+    'Quant': 'quant',
+    'India': 'india',
+  };
+  const tierVariant = tierVariantMap[tier] || 'default';
+
+  // Get tier-specific gradient colors
+  const tierGradients = {
+    'S': 'from-[var(--accent-primary)]/20 to-[var(--accent-primary)]/5',
+    'A': 'from-[var(--accent-primary)]/15 to-[var(--accent-primary)]/5',
+    'Quant': 'from-[var(--accent-warning)]/15 to-[var(--accent-warning)]/5',
+    'India': 'from-[var(--accent-success)]/15 to-[var(--accent-success)]/5',
+  };
+  const gradientClass = tierGradients[tier] || 'from-[var(--bg-surface-2)] to-[var(--bg-surface)]';
+
   return (
     <MotionDiv
-      variants={itemVariants}
-      whileHover={hoverAnimation}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
+      whileHover={prefersReducedMotion ? {} : { y: -2 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       className="h-full"
     >
       <Card
@@ -58,93 +59,100 @@ const CompanyCard = ({ company, onClick, index = 0, isFavorite = false, onToggle
         role="button"
         tabIndex={0}
         aria-label={`View ${company.question_count || 0} questions for ${company.name}`}
-        className={`p-6 h-full flex flex-col justify-between cursor-pointer relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-black-base ${
-          isSelected ? 'ring-2 ring-accent-primary ring-offset-2 ring-offset-black-base shadow-[var(--elevation-glow)]' : ''
-        }`}
+        className={`
+          p-[var(--space-4)] h-full flex flex-col cursor-pointer relative overflow-hidden group
+          bg-[var(--bg-surface)] border border-[var(--border-subtle)]
+          hover:border-[var(--border-default)] hover:bg-[var(--bg-surface-2)]
+          hover:shadow-[var(--elevation-2)]
+          transition-all duration-[var(--duration-fast)]
+          focus-visible:shadow-[var(--focus-ring)]
+          ${isSelected ? 'ring-2 ring-[var(--accent-primary)] shadow-[var(--elevation-3)]' : ''}
+        `}
       >
-        {/* Background gradient effect */}
-        <div className="absolute inset-0 bg-gradient-to-br from-accent-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden="true" />
+        {/* Background gradient effect - tier-based */}
+        <div className={`absolute inset-0 bg-gradient-to-br ${gradientClass} opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--duration-normal)]`} aria-hidden="true" />
 
-        {/* Favorite button */}
+        {/* Favorite button - top right */}
         {onToggleFavorite && (
-          <button
-            onClick={onToggleFavorite}
-            className="absolute top-4 right-4 z-20 text-2xl transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-black-elevated rounded"
-            aria-label={isFavorite ? `Remove ${company.name} from favorites` : `Add ${company.name} to favorites`}
-          >
-            {isFavorite ? '⭐' : '☆'}
-          </button>
+          <div className="absolute top-[var(--space-3)] right-[var(--space-3)] z-20">
+            <Tooltip content={isFavorite ? "Remove from favorites" : "Add to favorites"}>
+              <IconButton
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite();
+                }}
+                aria-label={isFavorite ? `Remove ${company.name} from favorites` : `Add ${company.name} to favorites`}
+                className={isFavorite ? 'text-[var(--accent-warning)]' : 'text-[var(--text-tertiary)]'}
+              >
+                <FaStar className={isFavorite ? 'fill-current' : ''} />
+              </IconButton>
+            </Tooltip>
+          </div>
         )}
 
         {/* Selected indicator */}
         {isSelected && (
-          <div className="absolute top-4 left-4 z-30">
-            <div className="w-6 h-6 rounded-full bg-accent-primary flex items-center justify-center">
+          <div className="absolute top-[var(--space-3)] left-[var(--space-3)] z-30">
+            <div className="w-6 h-6 rounded-full bg-[var(--accent-primary)] flex items-center justify-center shadow-[var(--elevation-2)]">
               <FaCheck className="text-white text-xs" />
             </div>
           </div>
         )}
 
         {/* Content */}
-        <div className="relative z-10">
-          {/* Company icon and name */}
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              {/* Logo monogram */}
-              <div className="w-12 h-12 rounded-full bg-black-elevated-hover border border-border-soft flex items-center justify-center group-hover:border-accent-primary/50 transition-colors flex-shrink-0" aria-hidden="true">
-                <span className="text-accent-primary text-lg font-bold">
-                  {company.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="pr-8 flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-semibold text-text-primary group-hover:text-accent-primary transition-colors truncate">
-                    {company.name}
-                  </h3>
-                  {(() => {
-                    const tier = getCompanyTier(company.name);
-                    const tierVariantMap = {
-                      'S': 'tierS',
-                      'A': 'tierA',
-                      'Quant': 'quant',
-                      'India': 'india',
-                    };
-                    return tier !== 'Low' && tierVariantMap[tier] && (
-                      <Pill variant={tierVariantMap[tier]} size="sm">
-                        {tier}
-                      </Pill>
-                    );
-                  })()}
-                </div>
-                {company.question_count !== undefined && (
-                  <p className="text-sm text-text-secondary">
-                    {company.question_count} {company.question_count === 1 ? 'question' : 'questions'}
-                  </p>
-                )}
-              </div>
+        <div className="relative z-10 flex flex-col flex-1">
+          {/* Logo/Monogram - Enhanced */}
+          <div className="mb-[var(--space-3)]">
+            <div className="w-14 h-14 rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--accent-primary-light)] to-[var(--bg-surface-2)] border border-[var(--border-subtle)] flex items-center justify-center group-hover:border-[var(--border-brand)] group-hover:shadow-[var(--elevation-1)] transition-all duration-[var(--duration-fast)]">
+              <span className="text-[var(--accent-primary)] text-xl font-bold">
+                {company.name.charAt(0).toUpperCase()}
+              </span>
             </div>
-            <FaChevronRight className="text-text-tertiary group-hover:text-accent-primary group-hover:translate-x-1 transition-all flex-shrink-0" aria-hidden="true" />
           </div>
 
-          {/* Company metadata */}
-          {(company.frequency || company.recent_questions) && (
-            <div className="flex flex-wrap gap-2 mt-4">
-              {company.frequency && (
-                <Badge variant="primary" size="sm">
-                  Frequency: {company.frequency}
-                </Badge>
-              )}
-              {company.recent_questions && (
-                <Badge variant="default" size="sm">
-                  {company.recent_questions} recent
-                </Badge>
-              )}
+          {/* Company Name + Tier */}
+          <div className="mb-[var(--space-2)]">
+            <div className="flex items-center gap-[var(--space-2)] mb-[var(--space-1)]">
+              <h3 className="text-base font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors truncate flex-1">
+                {company.name}
+              </h3>
             </div>
-          )}
+            {tier !== 'C' && tier !== 'B' && tierVariantMap[tier] && (
+              <Badge variant={tierVariant} size="sm" className="mb-[var(--space-2)]">
+                Tier {tier}
+              </Badge>
+            )}
+          </div>
+
+          {/* Metadata */}
+          <div className="flex flex-col gap-[var(--space-1)] text-xs text-[var(--text-secondary)] mt-auto">
+            {company.question_count !== undefined && company.question_count > 0 && (
+              <div className="flex items-center gap-[var(--space-1_5)]">
+                <span className="font-medium text-[var(--text-primary)]">
+                  {company.question_count}
+                </span>
+                <span className="text-[var(--text-tertiary)]">
+                  {company.question_count === 1 ? 'question' : 'questions'}
+                </span>
+              </div>
+            )}
+            {company.updated_at && (
+              <div className="text-[var(--text-tertiary)]">
+                Updated {format(new Date(company.updated_at), 'MMM d')}
+              </div>
+            )}
+          </div>
+
+          {/* Hover arrow indicator */}
+          <div className="absolute bottom-[var(--space-4)] right-[var(--space-4)] opacity-0 group-hover:opacity-100 transition-opacity duration-[var(--duration-fast)]">
+            <FaChevronRight className="text-[var(--accent-primary)] text-sm" aria-hidden="true" />
+          </div>
         </div>
 
-        {/* Hover indicator */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-primary to-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left" aria-hidden="true" />
+        {/* Hover bottom border indicator */}
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-[var(--duration-normal)] origin-left" aria-hidden="true" />
       </Card>
     </MotionDiv>
   );

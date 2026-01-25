@@ -15,7 +15,8 @@ const StreakCard = ({
   longestStreak = 0, 
   calendarHeatmap = [],
   onMilestone,
-  isDemo = false
+  isDemo = false,
+  cardVariant = 'matte'
 }) => {
   const prefersReducedMotion = useReducedMotion();
   const [showConfetti, setShowConfetti] = useState(false);
@@ -49,7 +50,7 @@ const StreakCard = ({
   }));
 
   return (
-    <Card className="p-6 relative overflow-hidden">
+    <Card variant={cardVariant} className="p-6 relative overflow-hidden">
       {/* Demo mode badge */}
       {isDemo && (
         <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">

@@ -117,6 +117,34 @@ function Dashboard() {
     navigate(`/companies?topics=${encodeURIComponent(topic)}`);
   };
 
+  // Format time helper
+  const formatTime = (seconds) => {
+    if (!seconds || seconds === 0) return '0m';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  // Format last active time
+  const formatLastActive = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   // Handle random question
   const handleRandomQuestion = async () => {
     try {
@@ -149,32 +177,78 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black-base flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent-primary mx-auto mb-4"></div>
-          <p className="text-text-secondary">Loading dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--accent-primary)] mx-auto mb-[var(--space-4)]"></div>
+          <p className="text-[var(--text-secondary)]">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black-base">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Hero section */}
-        <div ref={heroRef}>
-          <header>
-            <h1 className="text-4xl font-bold text-text-primary mb-2">
-              Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}! 👋
-            </h1>
-            <p className="text-lg text-text-secondary">
-              Ready to crush some problems today?
-            </p>
-          </header>
+    <div className="min-h-screen bg-[var(--bg-base)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Today Strip - Action-first */}
+        <div ref={heroRef} className="mb-[var(--space-4)]">
+          <div className="flex items-center justify-between mb-[var(--space-4)]">
+            <div>
+              <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-[var(--space-0_5)]">
+                Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}
+              </h1>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => navigate('/companies')}
+              className="font-semibold"
+            >
+              Start Focus Session →
+            </Button>
+          </div>
+          
+          {/* Today Metrics Strip */}
+          <div className="flex items-center gap-[var(--space-4)] flex-wrap p-[var(--space-3)] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)]">
+            <div className="flex items-center gap-[var(--space-2)]">
+              <span className="text-xs text-[var(--text-tertiary)]">Streak:</span>
+              <span className="text-sm font-semibold text-[var(--accent-primary)]">
+                {streak?.current_streak || 0} days
+              </span>
+            </div>
+            <div className="w-px h-4 bg-[var(--border-subtle)]" />
+            <div className="flex items-center gap-[var(--space-2)]">
+              <span className="text-xs text-[var(--text-tertiary)]">Solved today:</span>
+              <span className="text-sm font-semibold text-[var(--accent-success)]">
+                {analytics?.solve_stats?.solved_today || 0}
+              </span>
+            </div>
+            {analytics?.solve_stats?.time_spent_today_seconds !== undefined && (
+              <>
+                <div className="w-px h-4 bg-[var(--border-subtle)]" />
+                <div className="flex items-center gap-[var(--space-2)]">
+                  <span className="text-xs text-[var(--text-tertiary)]">Time today:</span>
+                  <span className="text-sm font-semibold text-[var(--accent-primary)]">
+                    {formatTime(analytics.solve_stats.time_spent_today_seconds)}
+                  </span>
+                </div>
+              </>
+            )}
+            {analytics?.next_recommended && (
+              <>
+                <div className="w-px h-4 bg-[var(--border-subtle)]" />
+                <div className="flex items-center gap-[var(--space-2)]">
+                  <span className="text-xs text-[var(--text-tertiary)]">Next:</span>
+                  <span className="text-sm font-medium text-[var(--text-primary)] truncate max-w-[200px]">
+                    {analytics.next_recommended.title}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Main content grid */}
-        <div ref={cardsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8" role="region" aria-label="Dashboard overview">
+        <div ref={cardsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-[var(--space-4)] mb-[var(--space-6)]" role="region" aria-label="Dashboard overview">
           {/* Streak card - spans 2 columns on large screens */}
           <div className="lg:col-span-2 dashboard-card">
             <StreakCard
@@ -185,42 +259,29 @@ function Dashboard() {
             />
           </div>
 
-          {/* Quick actions */}
+          {/* Quick actions - Structured panel */}
           <div className="dashboard-card">
-            <Card className="p-6 h-full">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">
-                Quick Actions
-              </h3>
+            <Card className="p-[var(--space-4)] h-full">
+              <Card.Header className="p-0 pb-[var(--space-3)]">
+                <Card.Title className="text-base">Quick Actions</Card.Title>
+              </Card.Header>
               <nav aria-label="Quick actions">
-                <div className="space-y-3">
+                <div className="space-y-[var(--space-2)]">
                   <SmartRandomButton
                     variant="primary"
-                    className="w-full"
+                    className="w-full text-sm"
                     showToggle={true}
                   />
                   <Button
                     variant="secondary"
-                    className="w-full"
-                    onClick={handleRandomQuestion}
-                    aria-label="Get a random question (legacy)"
-                  >
-                    🎲 Random Question (Legacy)
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="w-full"
+                    size="sm"
+                    className="w-full justify-start"
                     onClick={() => navigate('/companies')}
                     aria-label="Browse companies and their questions"
                   >
-                    📚 Browse Companies
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => navigate('/analytics')}
-                    aria-label="View your analytics and progress"
-                  >
-                    📊 View Analytics
+                    <span className="mr-[var(--space-2)]">📚</span>
+                    Browse Companies
+                    <span className="ml-auto text-xs text-[var(--text-tertiary)]">Ctrl+K</span>
                   </Button>
                 </div>
               </nav>
@@ -229,7 +290,7 @@ function Dashboard() {
         </div>
 
         {/* Weak topics and stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
           {/* Weak topics */}
           <div className="dashboard-card">
             <WeakTopicsCard
@@ -240,24 +301,24 @@ function Dashboard() {
 
           {/* Solve stats */}
           <div className="dashboard-card">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">
-                Solve Statistics
-              </h3>
+            <Card className="p-[var(--space-4)]">
+              <Card.Header className="p-0 pb-[var(--space-3)]">
+                <Card.Title className="text-base">Solve Statistics</Card.Title>
+              </Card.Header>
               
               {/* Total solved */}
-              <div className="mb-6">
-                <div className="text-4xl font-bold text-accent-primary mb-1" aria-label={`${analytics?.solve_stats?.total_solved || 0} total problems solved`}>
+              <div className="mb-5">
+                <div className="text-3xl font-bold text-[var(--accent-primary)] mb-1" aria-label={`${analytics?.solve_stats?.total_solved || 0} total problems solved`}>
                   {analytics?.solve_stats?.total_solved || 0}
                 </div>
-                <div className="text-sm text-text-secondary">
+                <div className="text-sm text-[var(--text-secondary)]">
                   Total problems solved
                 </div>
               </div>
 
               {/* By difficulty */}
-              <div className="space-y-3 mb-6">
-                <h4 className="text-sm font-medium text-text-secondary">
+              <div className="space-y-2.5 mb-5">
+                <h4 className="text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wide">
                   By Difficulty
                 </h4>
                 {['EASY', 'MEDIUM', 'HARD'].map((difficulty) => {
@@ -266,20 +327,20 @@ function Dashboard() {
                   
                   return (
                     <div key={difficulty} className="flex items-center justify-between">
-                      <Badge variant={variant}>{difficulty}</Badge>
-                      <span className="text-text-primary font-medium" aria-label={`${count} ${difficulty.toLowerCase()} problems solved`}>{count}</span>
+                      <Badge variant={variant} size="sm">{difficulty}</Badge>
+                      <span className="text-[var(--text-primary)] font-medium text-sm" aria-label={`${count} ${difficulty.toLowerCase()} problems solved`}>{count}</span>
                     </div>
                   );
                 })}
               </div>
 
               {/* Recent solve rate */}
-              <div className="pt-4 border-t border-border-subtle">
+              <div className="pt-4 border-t border-[var(--border-subtle)]">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-text-secondary">
+                  <span className="text-xs text-[var(--text-secondary)]">
                     Recent solve rate (last 10)
                   </span>
-                  <span className="text-lg font-semibold text-accent-primary" aria-label={`${Math.round((analytics?.solve_stats?.solve_rate_last_10 || 0) * 100)} percent solve rate`}>
+                  <span className="text-base font-semibold text-[var(--accent-primary)]" aria-label={`${Math.round((analytics?.solve_stats?.solve_rate_last_10 || 0) * 100)} percent solve rate`}>
                     {Math.round((analytics?.solve_stats?.solve_rate_last_10 || 0) * 100)}%
                   </span>
                 </div>
@@ -291,11 +352,11 @@ function Dashboard() {
         {/* Pattern distribution */}
         {analytics?.pattern_distribution && Object.keys(analytics.pattern_distribution).length > 0 && (
           <div className="dashboard-card">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">
-                Pattern Distribution
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="list" aria-label="Pattern distribution">
+            <Card className="p-5">
+              <Card.Header className="p-0 pb-4">
+                <Card.Title>Pattern Distribution</Card.Title>
+              </Card.Header>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" role="list" aria-label="Pattern distribution">
                 {Object.entries(analytics.pattern_distribution)
                   .sort(([, a], [, b]) => b.total - a.total)
                   .slice(0, 9)
@@ -305,30 +366,30 @@ function Dashboard() {
                     return (
                       <div
                         key={pattern}
-                        className="p-3 bg-black-elevated-hover rounded-lg border border-border-subtle"
+                        className="p-3 bg-[var(--bg-surface-2)] rounded-[var(--radius-md)] border border-[var(--border-subtle)]"
                         role="listitem"
                       >
-                        <div className="text-sm font-medium text-text-primary mb-2 capitalize">
+                        <div className="text-sm font-medium text-[var(--text-primary)] mb-2 capitalize">
                           {pattern.replace(/-/g, ' ')}
                         </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-text-secondary" aria-label={`${stats.solved} out of ${stats.total} solved`}>
+                        <div className="flex items-center justify-between text-xs mb-2">
+                          <span className="text-[var(--text-secondary)]" aria-label={`${stats.solved} out of ${stats.total} solved`}>
                             {stats.solved}/{stats.total}
                           </span>
                           <span className={`font-semibold ${
-                            solveRate >= 70 ? 'text-accent-success' :
-                            solveRate >= 50 ? 'text-accent-warning' :
-                            'text-accent-danger'
+                            solveRate >= 70 ? 'text-[var(--accent-success)]' :
+                            solveRate >= 50 ? 'text-[var(--accent-warning)]' :
+                            'text-[var(--accent-danger)]'
                           }`} aria-label={`${Math.round(solveRate)} percent solve rate`}>
                             {Math.round(solveRate)}%
                           </span>
                         </div>
-                        <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(solveRate)} aria-valuemin="0" aria-valuemax="100" aria-label={`${pattern} progress`}>
+                        <div className="h-1.5 bg-[var(--bg-surface)] rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(solveRate)} aria-valuemin="0" aria-valuemax="100" aria-label={`${pattern} progress`}>
                           <motion.div
                             className={`h-full rounded-full ${
-                              solveRate >= 70 ? 'bg-accent-success' :
-                              solveRate >= 50 ? 'bg-accent-warning' :
-                              'bg-accent-danger'
+                              solveRate >= 70 ? 'bg-[var(--accent-success)]' :
+                              solveRate >= 50 ? 'bg-[var(--accent-warning)]' :
+                              'bg-[var(--accent-danger)]'
                             }`}
                             initial={{ width: 0 }}
                             animate={{ width: `${solveRate}%` }}
@@ -345,25 +406,25 @@ function Dashboard() {
 
         {/* Rate budget info */}
         {analytics?.rate_budget && (
-          <div className="dashboard-card mt-6">
-            <Card className="p-4 bg-black-elevated-hover">
+          <div className="dashboard-card mt-4">
+            <Card className="p-4 bg-[var(--bg-surface-2)] border-[var(--border-brand)]/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl" aria-hidden="true">🤖</span>
+                  <span className="text-xl" aria-hidden="true">🤖</span>
                   <div>
-                    <div className="text-sm font-medium text-text-primary">
+                    <div className="text-sm font-medium text-[var(--text-primary)]">
                       AI Tutor Budget
                     </div>
-                    <div className="text-xs text-text-secondary">
+                    <div className="text-xs text-[var(--text-secondary)]">
                       Resets daily at midnight
                     </div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-semibold text-accent-primary" aria-label={`${analytics.rate_budget.tokens_remaining.toLocaleString()} tokens remaining`}>
+                  <div className="text-sm font-semibold text-[var(--accent-primary)]" aria-label={`${analytics.rate_budget.tokens_remaining.toLocaleString()} tokens remaining`}>
                     {analytics.rate_budget.tokens_remaining.toLocaleString()} tokens
                   </div>
-                  <div className="text-xs text-text-secondary" aria-label={`${analytics.rate_budget.requests_remaining} requests remaining`}>
+                  <div className="text-xs text-[var(--text-secondary)]" aria-label={`${analytics.rate_budget.requests_remaining} requests remaining`}>
                     {analytics.rate_budget.requests_remaining} requests left
                   </div>
                 </div>

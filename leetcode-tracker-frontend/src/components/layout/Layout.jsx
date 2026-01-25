@@ -7,6 +7,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import useAdminShortcut from '../../hooks/useAdminShortcut';
 import Header from './Header';
 import Sidebar from './Sidebar';
+import Footer from './Footer';
 
 /**
  * Layout component with integrated motion system
@@ -38,7 +39,7 @@ function Layout({ showSidebar = false, showHeader = true }) {
   }, [location.pathname, prefersReducedMotion]);
 
   return (
-    <div className="min-h-screen bg-black-base flex flex-col">
+    <div className="min-h-screen bg-[var(--bg-base)] flex flex-col">
       {showHeader && <Header />}
       
       <div className="flex flex-1">
@@ -52,6 +53,7 @@ function Layout({ showSidebar = false, showHeader = true }) {
           </AnimatePresence>
         </main>
       </div>
+      <Footer />
     </div>
   );
 }
@@ -67,7 +69,7 @@ export function SimpleLayout() {
   useAdminShortcut();
 
   return (
-    <div className="min-h-screen bg-black-base">
+    <div className="min-h-screen bg-[var(--bg-base)]">
       <AnimatePresence mode="wait">
         <PageTransition key={location.pathname} mode="fadeScale">
           <Outlet />

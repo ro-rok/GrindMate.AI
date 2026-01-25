@@ -1,26 +1,70 @@
 /**
  * Design Tokens - GrindMate.AI
- * Premium black theme with motion tokens
+ * Premium graphite theme with glass morphism and motion tokens
+ * Following Visual Constitution v1.0
  */
 
 :root {
   /* ============================================
-     BASE COLORS
+     SURFACE HIERARCHY (Graphite Base)
      ============================================ */
   
-  /* Base blacks */
-  --black-base: #0a0a0a;
-  --black-elevated: #141414;
-  --black-elevated-hover: #1a1a1a;
+  /* Background layers - Graphite (not pure black) */
+  --bg-base: #0f0f0f;
+  --bg-surface: #141414;
+  --bg-surface-2: #1a1a1a;
+  --bg-elevated: #1f1f1f;
+  
+  /* Legacy aliases for backward compatibility */
+  --black-base: var(--bg-base);
+  --black-elevated: var(--bg-surface);
+  --black-elevated-hover: var(--bg-surface-2);
 
-  /* Accents */
+  /* ============================================
+     GLASS MORPHISM
+     ============================================ */
+  
+  --glass-bg: rgba(20, 20, 20, 0.6);
+  --glass-bg-hover: rgba(26, 26, 26, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.12);
+  --glass-blur: blur(12px);
+
+  /* ============================================
+     BRAND & ACCENTS
+     ============================================ */
+  
+  /* Primary accent */
   --accent-primary: #0ea5e9;
   --accent-primary-hover: #0284c7;
+  --accent-primary-light: rgba(14, 165, 233, 0.1);
+  --accent-primary-dark: #0369a1;
+  
+  /* Secondary accent (use sparingly) */
+  --accent-secondary: #8b5cf6;
+  --accent-secondary-hover: #7c3aed;
+  
+  /* Semantic colors */
   --accent-success: #10b981;
+  --accent-success-hover: #059669;
+  --accent-success-light: rgba(16, 185, 129, 0.1);
+  
   --accent-warning: #f59e0b;
+  --accent-warning-hover: #d97706;
+  --accent-warning-light: rgba(245, 158, 11, 0.1);
+  
   --accent-danger: #ef4444;
+  --accent-danger-hover: #dc2626;
+  --accent-danger-light: rgba(239, 68, 68, 0.1);
+  
+  --accent-info: var(--accent-primary);
+  --accent-info-light: var(--accent-primary-light);
 
-  /* Grays */
+  /* ============================================
+     TEXT COLORS
+     ============================================ */
+  
+  /* Grays for text */
   --gray-50: #fafafa;
   --gray-100: #f5f5f5;
   --gray-200: #e5e5e5;
@@ -32,39 +76,56 @@
   --gray-800: #262626;
   --gray-900: #171717;
 
-  /* Semantic colors */
+  /* Semantic text colors */
   --text-primary: var(--gray-50);
   --text-secondary: var(--gray-400);
   --text-tertiary: var(--gray-600);
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  --text-muted: var(--gray-500);
+  --text-disabled: var(--gray-700);
+
+  /* ============================================
+     BORDERS
+     ============================================ */
+  
+  /* Border hierarchy - always use opacity */
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-default: rgba(255, 255, 255, 0.08);
   --border-emphasis: rgba(255, 255, 255, 0.12);
+  --border-brand: rgba(14, 165, 233, 0.3);
+  --border-success: rgba(16, 185, 129, 0.3);
+  --border-warning: rgba(245, 158, 11, 0.3);
+  --border-danger: rgba(239, 68, 68, 0.3);
   
-  /* Soft borders (low opacity) */
-  --border-soft: rgba(255, 255, 255, 0.05);
-  --border-soft-hover: rgba(255, 255, 255, 0.08);
-  
-  /* Panel gradients */
-  --panel-gradient: linear-gradient(135deg, rgba(20, 20, 20, 1) 0%, rgba(14, 14, 14, 1) 100%);
-  --panel-gradient-hover: linear-gradient(135deg, rgba(26, 26, 26, 1) 0%, rgba(20, 20, 20, 1) 100%);
-  
-  /* Brand gradient */
-  --brand-gradient: linear-gradient(135deg, var(--accent-primary) 0%, #0284c7 100%);
-  
-  /* Additional panel colors */
-  --panel: var(--black-elevated);
-  --panel2: var(--black-elevated-hover);
-  
-  /* Soft borders (low opacity for depth without heavy borders) */
-  --border-soft: rgba(255, 255, 255, 0.05);
-  --border-soft-hover: rgba(255, 255, 255, 0.1);
-  
-  /* Panel gradients */
-  --panel-gradient: linear-gradient(180deg, var(--black-elevated) 0%, var(--black-base) 100%);
-  --panel-gradient-hover: linear-gradient(180deg, var(--black-elevated-hover) 0%, var(--black-elevated) 100%);
+  /* Legacy aliases */
+  --border-soft: var(--border-subtle);
+  --border-soft-hover: var(--border-default);
+
+  /* ============================================
+     GRADIENTS
+     ============================================ */
   
   /* Brand gradients */
-  --brand-gradient: linear-gradient(135deg, var(--accent-primary) 0%, #0284c7 100%);
-  --brand-gradient-subtle: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(2, 132, 199, 0.05) 100%);
+  --gradient-brand: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
+  --gradient-brand-subtle: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(2, 132, 199, 0.05) 100%);
+  
+  /* Mesh gradient for backgrounds */
+  --gradient-mesh: radial-gradient(at 40% 20%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
+                    radial-gradient(at 80% 0%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
+                    radial-gradient(at 0% 50%, rgba(16, 185, 129, 0.04) 0px, transparent 50%);
+  
+  /* Surface gradients */
+  --gradient-surface: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-base) 100%);
+  --gradient-surface-hover: linear-gradient(180deg, var(--bg-surface-2) 0%, var(--bg-surface) 100%);
+  
+  /* Legacy aliases */
+  --panel-gradient: var(--gradient-surface);
+  --panel-gradient-hover: var(--gradient-surface-hover);
+  --brand-gradient: var(--gradient-brand);
+  --brand-gradient-subtle: var(--gradient-brand-subtle);
+  
+  /* Additional panel colors */
+  --panel: var(--bg-surface);
+  --panel2: var(--bg-surface-2);
 
   /* ============================================
      TYPOGRAPHY
@@ -72,6 +133,7 @@
   
   /* Font family */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Courier New', monospace;
 
   /* Font sizes (fluid scale) */
   --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
@@ -132,24 +194,35 @@
   --radius-full: 9999px;
 
   /* ============================================
-     SHADOWS
+     SHADOWS & GLOWS
      ============================================ */
   
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  /* Ambient shadows (soft depth) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.25);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
   
-  /* Premium glow for focus states */
-  --shadow-glow: 0 0 20px rgba(14, 165, 233, 0.3);
+  /* Glow tokens (use with restraint) */
+  --glow-brand: 0 0 20px rgba(14, 165, 233, 0.2);
+  --glow-brand-strong: 0 0 20px rgba(14, 165, 233, 0.3);
+  --glow-success: 0 0 12px rgba(16, 185, 129, 0.15);
+  --glow-warning: 0 0 12px rgba(245, 158, 11, 0.15);
+  --glow-danger: 0 0 12px rgba(239, 68, 68, 0.15);
+  
+  /* Focus ring glow */
+  --focus-ring: 0 0 0 2px var(--accent-primary), 0 0 0 4px rgba(14, 165, 233, 0.2);
   
   /* Elevation tokens (shadow layers for depth) */
-  --elevation-1: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-  --elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --elevation-4: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --elevation-glow: 0 0 0 1px rgba(14, 165, 233, 0.1), 0 0 20px rgba(14, 165, 233, 0.2);
+  --elevation-1: 0 1px 3px 0 rgba(0, 0, 0, 0.15), 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+  --elevation-2: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  --elevation-3: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  --elevation-4: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  --elevation-glow: 0 0 0 1px rgba(14, 165, 233, 0.1), var(--glow-brand);
+  
+  /* Legacy aliases */
+  --shadow-glow: var(--glow-brand-strong);
 
   /* ============================================
      MOTION TOKENS
@@ -185,6 +258,22 @@
   --breakpoint-md: 768px;
   --breakpoint-lg: 1024px;
   --breakpoint-xl: 1280px;
+  
+  /* ============================================
+     NOISE & TEXTURE
+     ============================================ */
+  
+  /* Subtle noise texture for depth */
+  --noise-opacity: 0.015;
+  --noise-size: 200px;
+  
+  /* Vignette */
+  --vignette-opacity: 0.3;
+  --vignette-size: 80%;
+  
+  /* Radial glow from center */
+  --radial-glow-opacity: 0.15;
+  --radial-glow-size: 60%;
 }
 
 /* ============================================

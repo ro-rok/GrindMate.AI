@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from 'react';
 import toast from '../../utils/toast';
 import ReactMarkdown from 'react-markdown';
@@ -29,14 +30,16 @@ function MessageBubble({ role, content, markdownRenderers }) {
 
   return (
     <div
-      className={`max-w-[85%] p-3 rounded-lg relative group ${
+      className={`max-w-[85%] p-4 rounded-[var(--radius-lg)] relative group ${
         role === 'user'
-          ? 'bg-accent-primary/20 text-text-primary border border-accent-primary/30'
-          : 'bg-black-elevated text-text-secondary border border-border-soft'
+          ? 'bg-[var(--accent-primary-light)] text-[var(--text-primary)] border border-[var(--border-brand)] ml-auto'
+          : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
       }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold opacity-75">
+        <div className={`text-xs font-semibold ${
+          role === 'user' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-secondary)]'
+        }`}>
           {role === 'user' ? 'You' : 'AI Tutor'}
         </div>
         <div className="flex items-center gap-2">
@@ -429,32 +432,11 @@ function TutorPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col transition-opacity duration-200 h-full">
+    <div className="flex-1 flex flex-col transition-opacity duration-200 overflow-hidden" style={{ minHeight: 0 }}>
       {/* Question Context Display */}
-      {questionContext && (
-        <div className="p-4 border-b border-border-subtle bg-black-base">
-          <h3 className="text-sm font-semibold text-text-primary mb-2">
-            {questionContext.title}
-          </h3>
-          <div className="flex items-center gap-2 text-xs text-text-tertiary">
-            <span className={`px-2 py-0.5 rounded ${
-              questionContext.difficulty?.toLowerCase() === 'easy' ? 'bg-green-500/20 text-green-400' :
-              questionContext.difficulty?.toLowerCase() === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-              'bg-red-500/20 text-red-400'
-            }`}>
-              {questionContext.difficulty}
-            </span>
-            {questionContext.topics && (
-              <span className="text-text-tertiary">
-                {questionContext.topics.split(',').slice(0, 2).join(', ')}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
       
       {/* Tutor Mode Tabs */}
-      <div className="p-4 border-b border-border-soft bg-black-elevated">
+      <div className="px-3 py-2 border-b border-border-soft bg-black-elevated flex-shrink-0">
         <Tabs value={tutorMode} onChange={handleModeChange}>
           {tutorModes.map((mode) => (
             <Tabs.Tab key={mode.value} value={mode.value}>
@@ -465,27 +447,27 @@ function TutorPanel({
         </Tabs>
       </div>
 
-      {/* Action Buttons - Subtask 10.2 */}
-      <div className="p-4 border-b border-border-subtle bg-black-elevated">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">
+      {/* Action Buttons - Compact */}
+      <div className="px-3 py-2 border-b border-border-subtle bg-black-elevated flex-shrink-0">
+        <h3 className="text-xs font-semibold text-text-primary mb-2">
           Quick Actions
         </h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {actionButtons.map((btn) => (
             <button
               key={btn.action}
               onClick={() => handleActionButton(btn.action)}
               disabled={isLoading}
-              className={`p-3 rounded-lg text-left transition-all text-xs ${
+              className={`px-2 py-1.5 rounded-md text-left transition-all text-xs ${
                 btn.variant === 'warning'
                   ? 'bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30'
                   : 'bg-black-base border border-border-subtle hover:border-accent-primary text-text-primary'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={btn.description}
             >
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{btn.icon}</span>
-                <span className="font-medium">{btn.label}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm">{btn.icon}</span>
+                <span className="font-medium text-xs leading-tight">{btn.label}</span>
               </div>
             </button>
           ))}
@@ -529,22 +511,22 @@ function TutorPanel({
 
       {/* Error Display */}
       {error && (
-        <div className="px-4 py-3 bg-accent-danger/20 border-b border-accent-danger/30">
+        <div className="px-3 py-2 bg-accent-danger/20 border-b border-accent-danger/30 flex-shrink-0">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1">
-              <div className="text-sm font-semibold text-accent-danger mb-1">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-accent-danger mb-0.5">
                 Error
               </div>
-              <div className="text-xs text-accent-danger/90">{error}</div>
+              <div className="text-xs text-accent-danger/90 truncate">{error}</div>
               {resetTime && (
-                <div className="text-xs text-accent-danger/70 mt-1">
+                <div className="text-xs text-accent-danger/70 mt-0.5">
                   Try again in {formatResetTime(resetTime)}
                 </div>
               )}
             </div>
             <button
               onClick={() => setError(null)}
-              className="text-accent-danger hover:text-red-400 transition-colors"
+              className="text-accent-danger hover:text-red-400 transition-colors flex-shrink-0"
             >
               ✕
             </button>
@@ -553,7 +535,16 @@ function TutorPanel({
       )}
 
       {/* Chat History - Subtask 10.4 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-black-base">
+      <div 
+        className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2 bg-black-base" 
+        data-lenis-prevent
+        style={{ 
+          minHeight: 0, 
+          flex: '1 1 0%',
+          WebkitOverflowScrolling: 'touch',
+          position: 'relative'
+        }}
+      >
         {chatHistory.length === 0 ? (
           <div className="text-center text-text-tertiary text-sm py-8">
             <div className="text-4xl mb-3">💬</div>
@@ -576,9 +567,9 @@ function TutorPanel({
         )}
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-black-elevated border border-border-subtle p-3 rounded-lg">
-              <div className="flex items-center gap-2 text-text-tertiary text-sm">
-                <div className="animate-spin">⏳</div>
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-3 rounded-[var(--radius-lg)]">
+              <div className="flex items-center gap-2 text-[var(--text-secondary)] text-sm">
+                <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)] animate-pulse" />
                 <span>AI is thinking...</span>
               </div>
             </div>
@@ -588,17 +579,17 @@ function TutorPanel({
       </div>
 
       {/* Chat Input - Subtask 10.4 */}
-      <div className="p-4 border-t border-border-soft bg-black-elevated">
-        <div className="flex flex-col gap-2">
-          {/* Suggestion Chips */}
+      <div className="px-3 py-2 border-t border-border-soft bg-black-elevated flex-shrink-0">
+        <div className="flex flex-col gap-1.5">
+          {/* Suggestion Chips - Compact */}
           {currentMessage === '' && (
-            <div className="flex flex-wrap gap-2 mb-2">
+            <div className="flex flex-wrap gap-1.5 mb-1">
               {suggestionChips.map((chip) => (
                 <Pill
                   key={chip}
                   variant="default"
                   size="sm"
-                  className="cursor-pointer hover:bg-accent-primary/20 hover:border-accent-primary/30 transition-colors"
+                  className="cursor-pointer hover:bg-accent-primary/20 hover:border-accent-primary/30 transition-colors text-xs"
                   onClick={() => {
                     const messageMap = {
                       'Clarify constraints': 'Can you clarify the constraints and requirements?',
@@ -617,7 +608,7 @@ function TutorPanel({
             </div>
           )}
           
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <input
               ref={messageInputRef}
               type="text"
@@ -631,7 +622,7 @@ function TutorPanel({
               }}
               placeholder="Ask a question... (Ctrl+Enter to send)"
               disabled={isLoading || requestsRemaining === 0}
-              className="flex-1 px-3 py-2 bg-black-base text-text-primary rounded-lg border border-border-soft focus:border-accent-primary focus:outline-none text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-2.5 py-1.5 bg-black-base text-text-primary rounded-md border border-border-soft focus:border-accent-primary focus:outline-none text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <Button
               onClick={() => handleSendMessage()}
@@ -639,19 +630,22 @@ function TutorPanel({
               size="sm"
               loading={isLoading}
               disabled={!currentMessage.trim() || isLoading || requestsRemaining === 0}
+              className="text-xs px-3 py-1.5"
             >
               Send
             </Button>
           </div>
           
-          {/* Reset Tutor Button - Subtask 10.6 */}
-          <button
+          {/* Reset Tutor Button - Compact */}
+          <Button
             onClick={handleResetTutor}
             disabled={chatHistory.length === 0}
-            className="text-xs text-text-tertiary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+            variant="ghost"
+            size="sm"
+            className="text-xs w-auto self-start py-1 px-2 h-auto"
           >
-            🔄 Reset Conversation
-          </button>
+            🔄 Reset
+          </Button>
         </div>
       </div>
 

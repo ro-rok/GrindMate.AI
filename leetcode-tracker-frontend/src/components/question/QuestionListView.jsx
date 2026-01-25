@@ -1,11 +1,11 @@
-import { List } from 'react-window';
 import QuestionRow from './QuestionRow';
 import Skeleton from '../ui/Skeleton';
 import EmptyState from '../ui/EmptyState';
 
 /**
  * QuestionListView component
- * Virtualized list view for questions (default view)
+ * Dense list view for questions (Linear-style)
+ * Renders all questions normally to avoid nested scrolling issues
  */
 function QuestionListView({
   questions,
@@ -14,34 +14,15 @@ function QuestionListView({
   onAskAI,
   onMarkSolved,
   onStar,
+  onOpenLeetCode,
   isLoading = false,
-  itemHeight = 100,
+  itemHeight = 64, // Dense row height (for skeleton)
 }) {
-  const Row = ({ index, style }) => {
-    const question = questions[index];
-    if (!question) return null;
-
-    return (
-      <div style={style} className="px-2">
-        <QuestionRow
-          question={question}
-          solved={question.solved}
-          attempted={question.attempted}
-          onStart={onStart}
-          onAskAI={onAskAI}
-          onMarkSolved={onMarkSolved}
-          onStar={onStar}
-          onBookmark={() => {}}
-        />
-      </div>
-    );
-  };
-
   if (isLoading) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 10 }).map((_, i) => (
-          <Skeleton key={i} variant="row" height={itemHeight} className="rounded-lg" />
+          <Skeleton key={i} variant="row" height={itemHeight} className="rounded-[var(--radius-md)]" />
         ))}
       </div>
     );
@@ -57,16 +38,24 @@ function QuestionListView({
     );
   }
 
+  // Render all questions normally - no virtualization to avoid nested scroll
   return (
-    <div className="w-full">
-      <List
-        rowComponent={Row}
-        rowCount={questions.length}
-        rowHeight={itemHeight}
-        rowProps={{}}
-        style={{ height: 600, width: '100%' }}
-        className="question-list"
-      />
+    <div className="w-full space-y-[var(--space-1_5)]">
+      {questions.map((question, index) => (
+        <QuestionRow
+          key={question.id || index}
+          question={question}
+          solved={question.solved || false}
+          attempted={question.attempted || false}
+          starred={question.starred || false}
+          onStart={onStart}
+          onAskAI={onAskAI}
+          onMarkSolved={onMarkSolved}
+          onStar={onStar}
+          onOpenLeetCode={onOpenLeetCode}
+          layoutId={`question-${question.id}`}
+        />
+      ))}
     </div>
   );
 }

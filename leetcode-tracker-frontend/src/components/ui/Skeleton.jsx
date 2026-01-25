@@ -1,6 +1,7 @@
 /**
  * Skeleton component
- * Loading placeholder matching card/question shapes
+ * Premium loading placeholder with pulse animation
+ * Multiple variants for different content types
  */
 function Skeleton({
   variant = 'text', // 'text' | 'circular' | 'rectangular' | 'card' | 'row'
@@ -9,19 +10,19 @@ function Skeleton({
   className = '',
   lines = 1,
 }) {
-  const baseStyles = 'animate-pulse bg-gray-800 rounded';
+  const baseStyles = 'animate-pulse bg-[var(--bg-surface-2)] rounded';
 
   const variantStyles = {
     text: 'h-4',
     circular: 'rounded-full',
     rectangular: '',
-    card: 'h-48',
-    row: 'h-12',
+    card: 'h-48 rounded-[var(--radius-lg)]',
+    row: 'h-16 rounded-[var(--radius-md)]',
   };
 
   if (variant === 'text' && lines > 1) {
     return (
-      <div className={`space-y-2 ${className}`}>
+      <div className={`space-y-2 ${className}`} aria-hidden="true">
         {Array.from({ length: lines }).map((_, i) => (
           <div
             key={i}
@@ -30,7 +31,6 @@ function Skeleton({
               width: i === lines - 1 ? '60%' : '100%',
               height: height || undefined,
             }}
-            aria-hidden="true"
           />
         ))}
       </div>
@@ -45,6 +45,7 @@ function Skeleton({
         height: height || undefined,
       }}
       aria-hidden="true"
+      aria-busy="true"
     />
   );
 }

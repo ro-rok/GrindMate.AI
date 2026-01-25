@@ -54,6 +54,11 @@ function FocusMode() {
   const [usedTutor, setUsedTutor] = useState(false);
   const [showCompletionSheet, setShowCompletionSheet] = useState(false);
   const [tutorPanelCollapsed, setTutorPanelCollapsed] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [tutorPanelWidth, setTutorPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('focusModeTutorPanelWidth');
+    return saved ? parseInt(saved, 10) : 600;
+  });
   
   const codeEditorRef = useRef(null);
   const notesEditorRef = useRef(null);
@@ -452,8 +457,11 @@ function FocusMode() {
   // Show loading state
   if (isLoadingQuestion && !question && !questionError) {
     return (
-      <div className="fixed inset-0 bg-black-base z-50 flex items-center justify-center">
-        <div className="text-text-secondary">Loading question...</div>
+      <div className="fixed inset-0 bg-[var(--bg-base)] z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-[var(--accent-primary)]/30 border-t-[var(--accent-primary)] rounded-full animate-spin"></div>
+          <div className="text-[var(--text-secondary)] text-lg">Loading question...</div>
+        </div>
       </div>
     );
   }
@@ -461,7 +469,7 @@ function FocusMode() {
   // Show error state with retry
   if (questionError && !question) {
     return (
-      <div className="fixed inset-0 bg-black-base z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-[var(--bg-base)] z-50 flex items-center justify-center p-[var(--space-4)]">
         <div className="max-w-md w-full">
           <ErrorPanel
             title={questionError.title}
@@ -486,18 +494,21 @@ function FocusMode() {
   // Show error overlay if question loaded but there's a secondary error
   if (!question) {
     return (
-      <div className="fixed inset-0 bg-black-base z-50 flex items-center justify-center">
-        <div className="text-text-secondary">Loading question...</div>
+      <div className="fixed inset-0 bg-[var(--bg-base)] z-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-16 h-16 border-4 border-[var(--accent-primary)]/30 border-t-[var(--accent-primary)] rounded-full animate-spin"></div>
+          <div className="text-[var(--text-secondary)] text-lg">Loading question...</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black-base z-50">
-      <div className="h-full flex flex-col">
+    <div className="fixed inset-0 bg-[var(--bg-base)] z-50" data-lenis-prevent style={{ height: '100dvh', overflow: 'hidden' }}>
+      <div className="h-full flex flex-col" style={{ minHeight: 0 }}>
         {/* Error Banner (if error occurred but question loaded) */}
         {questionError && question && (
-          <div className="px-6 py-2 bg-accent-danger/10 border-b border-accent-danger/30">
+          <div className="px-[var(--space-6)] py-[var(--space-2)] bg-[var(--accent-danger-light)] border-b border-[var(--border-danger)]">
             <ErrorPanel
               title={questionError.title || 'Warning'}
               message={questionError.message}
@@ -508,44 +519,55 @@ function FocusMode() {
           </div>
         )}
         
-        {/* Minimal Command Bar */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-border-soft bg-black-elevated/95 backdrop-blur-sm">
-          <div className="flex items-center gap-4 flex-1 min-w-0">
-            {/* Question Title */}
-            <h1 className="text-lg font-semibold text-text-primary truncate">
-              {question.title}
-            </h1>
+        {/* IDE Status Bar */}
+        <div className="sticky top-0 z-10 flex items-center justify-between px-[var(--space-4)] py-[var(--space-2)] border-b border-[var(--border-subtle)] bg-[var(--glass-bg)] backdrop-blur-[var(--glass-blur)]">
+          <div className="flex items-center gap-[var(--space-2)] flex-1 min-w-0">
+
             
-            {/* Difficulty Badge */}
-            <Badge className={getDifficultyColor(question.difficulty)}>
+            {/* Difficulty */}
+            <Badge className={getDifficultyColor(question.difficulty)} size="sm">
               {question.difficulty}
             </Badge>
             
-            {/* Company Tags */}
-            {question.company_name && (
-              <Badge className="bg-accent-primary/20 text-accent-primary">
-                {question.company_name}
-              </Badge>
-            )}
-            
-            {/* Session State Badge */}
-            <Badge className={getStateBadgeColor(sessionState)}>
+            {/* Session State */}
+            <div className={`px-2.5 py-1 rounded-[var(--radius-sm)] text-xs font-medium ${
+              sessionState === 'solved' ? 'bg-[var(--accent-success-light)] text-[var(--accent-success)] border border-[var(--border-success)]' :
+              sessionState === 'stuck' ? 'bg-[var(--accent-warning-light)] text-[var(--accent-warning)] border border-[var(--border-warning)]' :
+              sessionState === 'attempting' ? 'bg-[var(--accent-primary-light)] text-[var(--accent-primary)] border border-[var(--border-brand)]' :
+              'bg-[var(--bg-surface-2)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
+            }`}>
               {getStateLabel(sessionState)}
-            </Badge>
+            </div>
+            
+            {/* Divider */}
+            <div className="w-px h-4 bg-[var(--border-subtle)]" />
             
             {/* Timer */}
-            <div className="flex items-center gap-2 text-text-secondary text-sm">
-              <span>⏱️</span>
-              <span className="font-mono">{formattedTime}</span>
-              {isRunning && <span className="text-green-400">●</span>}
+            <div className="flex items-center gap-[var(--space-1_5)] px-[var(--space-2)] py-[var(--space-0_5)] bg-[var(--bg-surface-2)] rounded-[var(--radius-sm)] border border-[var(--border-subtle)]">
+              <span className="text-xs text-[var(--text-secondary)]">⏱</span>
+              <span className="font-mono text-sm text-[var(--text-primary)] font-medium tabular-nums">
+                {formattedTime}
+              </span>
+              {isRunning && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-success)] animate-pulse" aria-label="Timer running" />
+              )}
+            </div>
+            
+            {/* Shortcuts Hint */}
+            <div className="hidden md:flex items-center gap-[var(--space-2)] ml-[var(--space-2)]">
+              <div className="w-px h-4 bg-[var(--border-subtle)]" />
+              <span className="text-xs text-[var(--text-tertiary)]">
+                Ctrl+1/2/3 • Esc to close
+              </span>
             </div>
           </div>
           
           {/* Action Buttons */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-[var(--space-2)]">
             <SmartRandomButton
               variant="ghost"
-              className="text-sm"
+              size="sm"
+              className="text-xs"
               showToggle={false}
               onQuestionSelected={(question) => {
                 // Navigate to the new question in Focus Mode
@@ -561,16 +583,23 @@ function FocusMode() {
                 I'm Stuck
               </Button>
             )}
-            <Button
-              variant="success"
-              size="sm"
-              onClick={handleMarkSolved}
-            >
-              ✅ Mark Solved
-            </Button>
+            {!question.solved && (
+              <Button
+                variant="success"
+                size="sm"
+                onClick={handleMarkSolved}
+              >
+                ✅ Mark Solved
+              </Button>
+            )}
+            {question.solved && (
+              <div className="px-[var(--space-4)] py-[var(--space-2)] bg-[var(--accent-success-light)] text-[var(--accent-success)] rounded-[var(--radius-md)] text-sm font-medium border border-[var(--border-success)]">
+                ✅ Solved
+              </div>
+            )}
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-text-tertiary hover:text-text-primary transition-colors text-sm"
+              className="px-[var(--space-3)] py-[var(--space-1_5)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors text-sm focus-visible:shadow-[var(--focus-ring)] rounded-[var(--radius-sm)]"
             >
               Close (Esc)
             </button>
@@ -578,28 +607,38 @@ function FocusMode() {
         </div>
 
         {/* Main Content - Two Panel Layout */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
           {/* Left Panel: Question Details */}
-          <div className="flex-1 overflow-y-auto p-6 bg-black-base">
-            <Card className="p-6 mb-6">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="text-2xl font-bold text-text-primary mb-2">
+          <div 
+            className="flex-1 p-[var(--space-4)] bg-[var(--bg-base)]" 
+            data-lenis-prevent
+            style={{ 
+              minHeight: 0, 
+              overflowY: 'auto', 
+              overflowX: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              position: 'relative'
+            }}
+          >
+            <Card className="p-[var(--space-4)] mb-[var(--space-4)]" layoutId={questionId ? `question-${questionId}` : undefined}>
+              <div className="flex items-start justify-between mb-[var(--space-3)]">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-[var(--space-2)] leading-[var(--leading-tight)]">
                     {question.title}
                   </h2>
                   
                   {/* Topics */}
                   {question.topics && (
-                    <div className="flex gap-2 flex-wrap mb-3">
+                    <div className="flex gap-[var(--space-1_5)] flex-wrap mb-[var(--space-2)]">
                       {question.topics.split(',').slice(0, 5).map((topic, i) => (
-                        <span key={i} className="px-2 py-1 bg-accent-primary/10 text-accent-primary rounded text-xs">
+                        <span key={i} className="px-[var(--space-2)] py-[var(--space-0_5)] bg-[var(--accent-primary-light)] text-[var(--accent-primary)] rounded-[var(--radius-sm)] text-xs">
                           {topic.trim()}
                         </span>
                       ))}
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-4 text-sm text-text-secondary">
+                  <div className="flex items-center gap-[var(--space-3)] text-sm text-[var(--text-secondary)]">
                     <span>Frequency: {question.frequency || 0}</span>
                   </div>
                 </div>
@@ -608,7 +647,7 @@ function FocusMode() {
                   href={question.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-accent-primary hover:text-accent-primary-hover transition-colors text-sm"
+                  className="inline-flex items-center gap-[var(--space-2)] text-[var(--accent-primary)] hover:text-[var(--accent-primary-hover)] transition-colors text-sm ml-[var(--space-4)] flex-shrink-0 focus-visible:shadow-[var(--focus-ring)] rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-1)]"
                 >
                   Open on LeetCode →
                 </a>
@@ -624,25 +663,33 @@ function FocusMode() {
               {!loadingContent && questionContent?.content && (
                 <div className="prose prose-invert max-w-none">
                   <div 
-                    className="text-text-secondary leetcode-content"
+                    className="text-[var(--text-secondary)] leetcode-content"
                     dangerouslySetInnerHTML={{ __html: questionContent.content }}
                   />
+                  {/* Make Examples and Constraints collapsible via CSS */}
+                  <style>{`
+                    .leetcode-content h3:has(+ p),
+                    .leetcode-content strong:contains("Example"),
+                    .leetcode-content strong:contains("Constraint") {
+                      cursor: pointer;
+                    }
+                  `}</style>
                 </div>
               )}
               
               {!loadingContent && !questionContent?.content && (
-                <div className="text-text-tertiary text-sm italic py-4">
+                <div className="text-[var(--text-tertiary)] text-sm italic py-[var(--space-4)]">
                   Question description not available. Click "Open on LeetCode" to view the full problem.
                 </div>
               )}
               
               {/* Code Snippets */}
               {questionContent?.codeSnippets && questionContent.codeSnippets.length > 0 && (
-                <div className="mt-6 p-4 bg-black-elevated rounded-lg border border-border-subtle">
-                  <h3 className="text-lg font-semibold text-text-primary mb-3">
+                <div className="mt-[var(--space-4)] p-[var(--space-3)] bg-[var(--bg-surface)] rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
+                  <h3 className="text-base font-semibold text-[var(--text-primary)] mb-[var(--space-2)]">
                     💻 Code Templates ({questionContent.codeSnippets.length} languages)
                   </h3>
-                  <div className="flex gap-2 mb-2 flex-wrap">
+                  <div className="flex gap-[var(--space-2)] mb-[var(--space-2)] flex-wrap">
                     {questionContent.codeSnippets.map((snippet) => (
                       <button
                         key={snippet.langSlug}
@@ -652,17 +699,17 @@ function FocusMode() {
                           setActiveTab('editor');
                           toast.success(`${snippet.lang} template loaded`);
                         }}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        className={`px-[var(--space-3)] py-[var(--space-1_5)] rounded-[var(--radius-md)] text-sm font-medium transition-all duration-[var(--duration-fast)] focus-visible:shadow-[var(--focus-ring)] ${
                           selectedLanguage === snippet.langSlug
-                            ? 'bg-accent-primary text-white shadow-lg scale-105'
-                            : 'bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 hover:scale-105'
+                            ? 'bg-[var(--accent-primary)] text-white shadow-[var(--elevation-2)]'
+                            : 'bg-[var(--accent-primary-light)] text-[var(--accent-primary)] hover:bg-[var(--accent-primary-light)] hover:border-[var(--border-brand)] border border-[var(--border-subtle)]'
                         }`}
                       >
                         {snippet.lang}
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-text-tertiary mt-2">
+                  <p className="text-xs text-[var(--text-tertiary)] mt-[var(--space-2)]">
                     Click any language to load its template in the code editor
                   </p>
                 </div>
@@ -672,14 +719,16 @@ function FocusMode() {
               {questionContent?.hints && questionContent.hints.length > 0 && (
                 <div className="mt-6">
                   <details className="group">
-                    <summary className="cursor-pointer text-text-primary font-semibold mb-2 hover:text-accent-primary transition-colors">
-                      💡 Hints ({questionContent.hints.length})
+                    <summary className="cursor-pointer text-[var(--text-primary)] font-semibold mb-2 hover:text-[var(--accent-primary)] transition-colors flex items-center gap-2">
+                      <span>💡</span>
+                      <span>Hints ({questionContent.hints.length})</span>
+                      <span className="ml-auto text-xs text-[var(--text-tertiary)] group-open:rotate-180 transition-transform">▼</span>
                     </summary>
                     <div className="space-y-2 mt-3">
                       {questionContent.hints.map((hint, index) => (
-                        <div key={index} className="p-3 bg-black-elevated rounded border border-border-subtle">
-                          <span className="text-accent-primary font-semibold">Hint {index + 1}:</span>
-                          <span className="text-text-secondary ml-2">{hint}</span>
+                        <div key={index} className="p-3 bg-[var(--bg-surface)] rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
+                          <span className="text-[var(--accent-primary)] font-semibold">Hint {index + 1}:</span>
+                          <span className="text-[var(--text-secondary)] ml-2">{hint}</span>
                         </div>
                       ))}
                     </div>
@@ -689,47 +738,73 @@ function FocusMode() {
             </Card>
           </div>
 
-          {/* Right Panel: AI Tutor (Collapsible) */}
-          <div className={`${tutorPanelCollapsed ? 'w-12' : 'w-[600px]'} border-l border-border-soft bg-black-elevated flex flex-col transition-all duration-300`}>
-            {/* Collapse Toggle */}
+          {/* Right Panel: AI Tutor (Collapsible + Resizable) */}
+          <div 
+            className={`${tutorPanelCollapsed ? 'w-12' : ''} border-l border-[var(--border-subtle)] bg-[var(--bg-surface)] flex flex-col transition-all duration-[var(--duration-normal)] relative`}
+            style={!tutorPanelCollapsed ? { width: `${tutorPanelWidth}px`, minWidth: '400px', maxWidth: '800px' } : {}}
+          >
+            {/* Resize Handle / Collapse Toggle */}
             <button
               onClick={() => setTutorPanelCollapsed(!tutorPanelCollapsed)}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-12 bg-black-elevated border border-border-soft rounded-l-lg flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-black-elevated-hover transition-colors z-10"
+              onMouseDown={(e) => {
+                // Allow drag to resize
+                if (tutorPanelCollapsed) return;
+                e.preventDefault();
+                const startX = e.clientX;
+                const startWidth = tutorPanelWidth;
+                
+                const handleMouseMove = (moveEvent) => {
+                  const diff = startX - moveEvent.clientX;
+                  const newWidth = Math.max(400, Math.min(800, startWidth + diff));
+                  setTutorPanelWidth(newWidth);
+                };
+                
+                const handleMouseUp = () => {
+                  document.removeEventListener('mousemove', handleMouseMove);
+                  document.removeEventListener('mouseup', handleMouseUp);
+                  // Save to localStorage
+                  localStorage.setItem('focusModeTutorPanelWidth', tutorPanelWidth.toString());
+                };
+                
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+              }}
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-12 bg-[var(--bg-surface-2)] border border-[var(--border-default)] rounded-l-[var(--radius-md)] flex items-center justify-center text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)] hover:border-[var(--border-brand)] transition-colors z-10 cursor-col-resize"
               aria-label={tutorPanelCollapsed ? 'Expand AI tutor' : 'Collapse AI tutor'}
             >
-              {tutorPanelCollapsed ? '→' : '←'}
+              {tutorPanelCollapsed ? '→' : '⋮'}
             </button>
             
             {!tutorPanelCollapsed && (
-              <div className="flex-1 flex flex-col">
+              <div className="flex-1 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
             {/* Tab Navigation */}
-            <div className="flex border-b border-border-subtle bg-black-elevated">
+            <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
               <button
                 onClick={() => handleTabChange('editor')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                className={`flex-1 px-[var(--space-3)] py-[var(--space-2)] text-sm font-medium transition-all duration-[var(--duration-fast)] focus-visible:shadow-[var(--focus-ring)] ${
                   activeTab === 'editor'
-                    ? 'text-accent-primary border-b-2 border-accent-primary bg-black-base'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-black-base/50'
+                    ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)] bg-[var(--bg-base)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)]/50'
                 }`}
               >
                 💻 Editor (Ctrl+1)
               </button>
               <button
                 onClick={() => handleTabChange('notes')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                className={`flex-1 px-[var(--space-3)] py-[var(--space-2)] text-sm font-medium transition-all duration-[var(--duration-fast)] focus-visible:shadow-[var(--focus-ring)] ${
                   activeTab === 'notes'
-                    ? 'text-accent-primary border-b-2 border-accent-primary bg-black-base'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-black-base/50'
+                    ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)] bg-[var(--bg-base)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)]/50'
                 }`}
               >
                 📝 Notes (Ctrl+2)
               </button>
               <button
                 onClick={() => handleTabChange('tutor')}
-                className={`flex-1 px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                className={`flex-1 px-[var(--space-3)] py-[var(--space-2)] text-sm font-medium transition-all duration-[var(--duration-fast)] focus-visible:shadow-[var(--focus-ring)] ${
                   activeTab === 'tutor'
-                    ? 'text-accent-primary border-b-2 border-accent-primary bg-black-base'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-black-base/50'
+                    ? 'text-[var(--accent-primary)] border-b-2 border-[var(--accent-primary)] bg-[var(--bg-base)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)]/50'
                 }`}
               >
                 🤖 AI Tutor (Ctrl+3)
@@ -737,12 +812,12 @@ function FocusMode() {
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
               {/* Editor Tab */}
               {activeTab === 'editor' && (
-                <div className="flex-1 flex flex-col p-4 transition-opacity duration-200 overflow-hidden">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-text-primary">
+                <div className="flex-1 flex flex-col p-[var(--space-3)] transition-opacity duration-[var(--duration-fast)] overflow-hidden" style={{ minHeight: 0 }}>
+                  <div className="flex items-center justify-between mb-[var(--space-2)]">
+                    <h3 className="text-base font-semibold text-[var(--text-primary)]">
                       Code Editor
                     </h3>
                     <div className="flex items-center gap-2">
@@ -779,7 +854,7 @@ function FocusMode() {
                               toast.success(`${snippet.lang} template loaded`);
                             }
                           }}
-                          className="px-3 py-1 bg-black-elevated text-text-primary border border-border-subtle rounded text-sm focus:border-accent-primary focus:outline-none cursor-pointer"
+                          className="px-[var(--space-3)] py-[var(--space-1)] bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-[var(--radius-md)] text-sm focus:border-[var(--accent-primary)] focus:outline-none focus-visible:shadow-[var(--focus-ring)] cursor-pointer"
                         >
                           {questionContent.codeSnippets.map((snippet) => (
                             <option key={snippet.langSlug} value={snippet.langSlug}>
@@ -823,14 +898,14 @@ function FocusMode() {
                       }
                     }}
                     placeholder="Write your solution here..."
-                    className="flex-1 p-4 bg-black-base text-text-primary font-mono text-sm rounded-lg border border-border-subtle focus:border-accent-primary focus:outline-none resize-none transition-colors"
+                    className="flex-1 p-[var(--space-3)] bg-[var(--bg-base)] text-[var(--text-primary)] font-mono text-sm rounded-[var(--radius-md)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] focus:outline-none focus-visible:shadow-[var(--focus-ring)] resize-none transition-colors"
                     spellCheck="false"
                   />
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-xs text-text-tertiary">
+                  <div className="flex items-center justify-between mt-[var(--space-2)]">
+                    <p className="text-xs text-[var(--text-tertiary)]">
                       💡 Press Tab to indent, Shift+Tab to unindent
                     </p>
-                    <p className="text-xs text-text-tertiary">
+                    <p className="text-xs text-[var(--text-tertiary)]">
                       {codeInput.length} characters
                     </p>
                   </div>
@@ -839,8 +914,8 @@ function FocusMode() {
 
               {/* Notes Tab */}
               {activeTab === 'notes' && (
-                <div className="flex-1 flex flex-col p-4 transition-opacity duration-200">
-                  <h3 className="text-lg font-semibold text-text-primary mb-3">
+                <div className="flex-1 flex flex-col p-[var(--space-3)] transition-opacity duration-[var(--duration-fast)]" style={{ minHeight: 0 }}>
+                  <h3 className="text-base font-semibold text-[var(--text-primary)] mb-[var(--space-2)]">
                     Your Notes
                   </h3>
                   <textarea
@@ -848,7 +923,7 @@ function FocusMode() {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Take notes, jot down ideas, track your approach..."
-                    className="flex-1 p-4 bg-black-base text-text-primary text-sm rounded-lg border border-border-subtle focus:border-accent-primary focus:outline-none resize-none transition-colors"
+                    className="flex-1 p-[var(--space-3)] bg-[var(--bg-base)] text-[var(--text-primary)] text-sm rounded-[var(--radius-md)] border border-[var(--border-subtle)] focus:border-[var(--accent-primary)] focus:outline-none focus-visible:shadow-[var(--focus-ring)] resize-none transition-colors leading-[var(--leading-relaxed)]"
                   />
                 </div>
               )}

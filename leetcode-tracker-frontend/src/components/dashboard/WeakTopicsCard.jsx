@@ -14,7 +14,8 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 const WeakTopicsCard = ({ 
   weakTopics = [], 
   onTopicClick,
-  isDemo = false
+  isDemo = false,
+  cardVariant = 'matte'
 }) => {
   const prefersReducedMotion = useReducedMotion();
   const [newWeakTopics, setNewWeakTopics] = useState(new Set());
@@ -44,7 +45,7 @@ const WeakTopicsCard = ({
   // Empty state
   if (weakTopics.length === 0) {
     return (
-      <Card className="p-6 relative">
+      <Card variant={cardVariant} className="p-6 relative">
         {/* Demo mode badge */}
         {isDemo && (
           <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
@@ -80,7 +81,7 @@ const WeakTopicsCard = ({
   const sortedTopics = [...weakTopics].sort((a, b) => a.solve_rate - b.solve_rate);
 
   return (
-    <Card className="p-6 relative">
+    <Card variant={cardVariant} className="p-6 relative">
       {/* Demo mode badge */}
       {isDemo && (
         <div className="absolute top-2 right-2 px-2 py-1 text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">

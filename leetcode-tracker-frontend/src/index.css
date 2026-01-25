@@ -8,7 +8,7 @@ html {
 }
 
 body {
-  background-color: var(--black-base);
+  background-color: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
   line-height: var(--leading-normal);
@@ -19,8 +19,38 @@ body {
   min-height: 100vh;
 }
 
-/* Ambient logo background watermark */
+/* Premium background system: Graphite base + noise + vignette + radial glow */
 body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-color: var(--bg-base);
+  background-image: 
+    /* Subtle noise texture */
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.015'/%3E%3C/svg%3E"),
+    /* Mesh gradient overlay */
+    var(--gradient-mesh),
+    /* Radial glow from center */
+    radial-gradient(circle at center, rgba(14, 165, 233, var(--radial-glow-opacity)) 0%, transparent var(--radial-glow-size));
+  background-size: var(--noise-size), 100% 100%, 100% 100%;
+  background-position: 0 0, center, center;
+  background-repeat: repeat, no-repeat, no-repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Vignette overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, var(--vignette-opacity)) var(--vignette-size));
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ambient logo background watermark */
+#root::before {
   content: '';
   position: fixed;
   top: 50%;
@@ -81,11 +111,12 @@ body::before {
   color: var(--black-base);
 }
 
-/* Ensure content appears above watermark */
+/* Ensure content appears above background layers */
 #root {
   position: relative;
   z-index: 1;
   min-height: 100vh;
+  isolation: isolate;
 }
 
 /* Premium card styling with subtle borders and shadows */
@@ -127,7 +158,7 @@ select {
 
 /* LeetCode content styling */
 .leetcode-content {
-  line-height: 1.8;
+  line-height: var(--leading-relaxed);
 }
 
 .leetcode-content p {
@@ -146,11 +177,11 @@ select {
 }
 
 .leetcode-content code {
-  background-color: var(--black-elevated);
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  font-family: 'Courier New', monospace;
-  font-size: 0.875rem;
+  background-color: var(--bg-surface);
+  padding: var(--space-0_5) var(--space-1_5);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   color: var(--accent-primary);
 }
 
@@ -167,7 +198,7 @@ select {
 }
 
 .leetcode-content li {
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--space-2);
 }
 
 .leetcode-content strong {
@@ -178,8 +209,8 @@ select {
 .leetcode-content img {
   max-width: 100%;
   height: auto;
-  border-radius: 0.5rem;
-  margin: 1rem 0;
+  border-radius: var(--radius-md);
+  margin: var(--space-4) 0;
 }
 
 .leetcode-content table {
@@ -196,14 +227,14 @@ select {
 }
 
 .leetcode-content th {
-  background-color: var(--black-elevated);
-  font-weight: 600;
+  background-color: var(--bg-surface);
+  font-weight: var(--font-semibold);
 }
 
 .leetcode-content blockquote {
   border-left: 4px solid var(--accent-primary);
-  padding-left: 1rem;
-  margin: 1rem 0;
+  padding-left: var(--space-4);
+  margin: var(--space-4) 0;
   color: var(--text-secondary);
   font-style: italic;
 }

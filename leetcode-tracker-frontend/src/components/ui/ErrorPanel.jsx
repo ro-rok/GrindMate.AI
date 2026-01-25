@@ -32,15 +32,15 @@ function ErrorPanel({
   };
 
   const variantStyles = {
-    error: 'border-accent-danger/30 bg-accent-danger/5',
-    warning: 'border-accent-warning/30 bg-accent-warning/5',
-    info: 'border-accent-primary/30 bg-accent-primary/5',
+    error: 'border-[var(--border-danger)] bg-[var(--accent-danger-light)]',
+    warning: 'border-[var(--border-warning)] bg-[var(--accent-warning-light)]',
+    info: 'border-[var(--border-brand)] bg-[var(--accent-primary-light)]',
   };
 
   const iconColors = {
-    error: 'text-accent-danger',
-    warning: 'text-accent-warning',
-    info: 'text-accent-primary',
+    error: 'text-[var(--accent-danger)]',
+    warning: 'text-[var(--accent-warning)]',
+    info: 'text-[var(--accent-primary)]',
   };
 
   return (
@@ -51,10 +51,10 @@ function ErrorPanel({
           aria-hidden="true"
         />
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-text-primary mb-1">
+          <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-1">
             {title}
           </h3>
-          <p className="text-sm text-text-secondary">
+          <p className="text-sm text-[var(--text-secondary)]">
             {message}
           </p>
           {onRetry && (

@@ -29,7 +29,7 @@ function Tabs({ children, defaultValue, value, onChange, className = '' }) {
 
   return (
     <TabsContext.Provider value={{ activeTab, setActiveTab }}>
-      <div className={`flex gap-1 ${className}`} role="tablist">
+      <div className={`flex gap-[var(--space-1)] ${className}`} role="tablist">
         {children}
       </div>
     </TabsContext.Provider>
@@ -57,10 +57,10 @@ function Tab({ value, children, disabled = false, className = '' }) {
     }
   };
 
-  const baseStyles = 'px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-black-base';
+  const baseStyles = `px-4 py-2 text-sm font-medium rounded-[var(--radius-md)] transition-all duration-[var(--duration-fast)] focus:outline-none focus-visible:shadow-[var(--focus-ring)]`;
   const activeStyles = isActive
-    ? 'bg-accent-primary text-white shadow-md'
-    : 'bg-black-elevated text-text-secondary hover:text-text-primary hover:bg-black-elevated-hover border border-border-subtle';
+    ? 'bg-[var(--accent-primary)] text-white shadow-[var(--elevation-1)]'
+    : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)] border border-[var(--border-subtle)]';
   const disabledStyles = disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer';
 
   return (

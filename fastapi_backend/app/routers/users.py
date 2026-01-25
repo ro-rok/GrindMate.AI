@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from ..db import get_database
 from ..auth import CurrentUser
@@ -42,6 +42,8 @@ class SolveStatsResponse(BaseModel):
     total_solved: int
     by_difficulty: Dict[str, int]
     solve_rate_last_10: float
+    solved_today: int = 0
+    time_spent_today_seconds: int = 0
 
 
 class RateBudgetResponse(BaseModel):
@@ -77,6 +79,15 @@ class StreakInfo(BaseModel):
     last_solve_date: Optional[date]
 
 
+class RecentQuestionResponse(BaseModel):
+    """Response model for recent question"""
+    question_id: str
+    title: str
+    company: Optional[str] = None
+    difficulty: Optional[str] = None
+    last_active: Optional[datetime] = None
+
+
 class AnalyticsResponse(BaseModel):
     """Response model for analytics endpoint"""
     streak: StreakInfo
@@ -84,6 +95,7 @@ class AnalyticsResponse(BaseModel):
     weak_topics: List[WeakTopicResponse]
     pattern_distribution: Dict[str, PatternDistributionItem]
     rate_budget: RateBudgetResponse
+    recent_question: Optional[RecentQuestionResponse] = None
 
 
 @router.get("/users/me/streak", response_model=StreakResponse)
@@ -220,6 +232,37 @@ async def get_user_analytics(
     # Calculate recent solve rate
     solve_rate_last_10 = await analytics_service.calculate_recent_solve_rate(current_user.id, last_n=10)
     
+    # Calculate time spent today and solved today
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    user_obj_id = ObjectId(current_user.id)
+    
+    # Get today's activity
+    today_questions = await db["user_questions"].find({
+        "user_id": user_obj_id,
+        "updated_at": {"$gte": today_start}
+    }).to_list(length=None)
+    
+    solved_today = sum(1 for q in today_questions if q.get("solved") and q.get("solved_at") and q.get("solved_at") >= today_start)
+    time_spent_today = sum(q.get("time_spent_seconds", 0) for q in today_questions)
+    
+    # Get recent question (last attempted/opened)
+    recent_question_doc = await db["user_questions"].find_one(
+        {"user_id": user_obj_id},
+        sort=[("last_attempt_at", -1)]
+    )
+    
+    recent_question = None
+    if recent_question_doc and recent_question_doc.get("question_id"):
+        question_doc = await db["questions"].find_one({"_id": recent_question_doc["question_id"]})
+        if question_doc:
+            recent_question = RecentQuestionResponse(
+                question_id=str(recent_question_doc["question_id"]),
+                title=question_doc.get("title", "Unknown"),
+                company=question_doc.get("company_name"),
+                difficulty=question_doc.get("difficulty"),
+                last_active=recent_question_doc.get("last_attempt_at")
+            )
+    
     # Build response
     return AnalyticsResponse(
         streak=StreakInfo(
@@ -230,7 +273,9 @@ async def get_user_analytics(
         solve_stats=SolveStatsResponse(
             total_solved=total_solved,
             by_difficulty=by_difficulty,
-            solve_rate_last_10=solve_rate_last_10
+            solve_rate_last_10=solve_rate_last_10,
+            solved_today=solved_today,
+            time_spent_today_seconds=time_spent_today
         ),
         weak_topics=weak_topics_response,
         pattern_distribution=pattern_distribution_response,
@@ -239,7 +284,8 @@ async def get_user_analytics(
             requests_remaining=current_user.rate_budget_requests,
             reset_at=current_user.rate_budget_reset_at,
             byok_enabled=bool(current_user.byok_groq_key) if hasattr(current_user, 'byok_groq_key') else False
-        )
+        ),
+        recent_question=recent_question
     )
 
 

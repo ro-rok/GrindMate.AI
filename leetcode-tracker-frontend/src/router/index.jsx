@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
-import LoaderTerminal from '../components/LoaderTerminal';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Layout, { SimpleLayout } from '../components/layout/Layout';
 import ErrorBoundary from '../components/ErrorBoundary';
 
@@ -13,14 +13,17 @@ const CompanyList = lazy(() => import('../pages/CompanyList'));
 const QuestionList = lazy(() => import('../pages/QuestionList'));
 const FocusMode = lazy(() => import('../pages/FocusMode'));
 const Profile = lazy(() => import('../pages/Profile'));
-const Analytics = lazy(() => import('../pages/Analytics'));
 const AdminPortal = lazy(() => import('../pages/AdminPortal'));
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard'));
 
 // Layout wrapper with Suspense
 function SuspenseLayout({ children }) {
   return (
-    <Suspense fallback={<LoaderTerminal />}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    }>
       {children}
     </Suspense>
   );
@@ -112,14 +115,6 @@ const router = createBrowserRouter([
             <ProtectedRoute>
               <Profile />
             </ProtectedRoute>
-          </SuspenseLayout>
-        ),
-      },
-      {
-        path: '/analytics',
-        element: (
-          <SuspenseLayout>
-            <Analytics />
           </SuspenseLayout>
         ),
       },

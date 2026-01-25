@@ -108,57 +108,74 @@ function CompletionBottomSheet({
             aria-modal="true"
             aria-labelledby="completion-sheet-title"
           >
-            <Card className="rounded-t-2xl rounded-b-none border-b-0 p-6 pb-8">
+            <Card variant="glass" className="rounded-t-[var(--radius-xl)] rounded-b-none border-b-0 p-6 pb-8">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 id="completion-sheet-title" className="text-2xl font-bold text-text-primary mb-1">
+                  <h2 id="completion-sheet-title" className="text-xl font-semibold text-[var(--text-primary)] mb-1">
                     How did it go?
                   </h2>
                   {questionTitle && (
-                    <p className="text-sm text-text-secondary truncate max-w-md">
+                    <p className="text-sm text-[var(--text-secondary)] truncate max-w-md">
                       {questionTitle}
                     </p>
                   )}
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-2 text-text-tertiary hover:text-text-primary transition-colors rounded-lg hover:bg-black-elevated"
+                  className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors rounded-[var(--radius-md)] hover:bg-[var(--bg-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
                   aria-label="Close"
                 >
                   <FaTimes />
                 </button>
               </div>
 
-              {/* Options */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {options.map((option) => (
+              {/* Options - Compact horizontal layout */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                {options.map((option, index) => (
                   <motion.button
                     key={option.id}
                     onClick={() => {
                       option.action();
                       onClose();
                     }}
-                    className="group text-left p-6 bg-black-elevated border border-border-soft rounded-xl hover:border-accent-primary/50 hover:bg-black-elevated-hover transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-accent-primary focus:ring-offset-2 focus:ring-offset-black-base"
-                    whileHover={prefersReducedMotion ? {} : { scale: 1.02 }}
+                    className={`
+                      group flex-1 text-left p-4 
+                      bg-[var(--bg-surface)] border rounded-[var(--radius-lg)]
+                      hover:border-[var(--border-brand)] hover:bg-[var(--bg-surface-2)]
+                      transition-all duration-[var(--duration-fast)]
+                      focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:ring-offset-2 focus:ring-offset-[var(--bg-base)]
+                      ${option.variant === 'success' ? 'border-[var(--border-success)]' : ''}
+                      ${option.variant === 'warning' ? 'border-[var(--border-warning)]' : ''}
+                    `}
+                    whileHover={prefersReducedMotion ? {} : { y: -2 }}
                     whileTap={prefersReducedMotion ? {} : { scale: 0.98 }}
                   >
-                    <div className="flex flex-col items-center text-center">
-                      <div className="mb-3">{option.icon}</div>
-                      <h3 className="text-lg font-semibold text-text-primary mb-2">
-                        {option.title}
-                      </h3>
-                      <p className="text-sm text-text-secondary">
-                        {option.description}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0">
+                        {option.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-semibold text-[var(--text-primary)] mb-0.5">
+                          {option.title}
+                        </h3>
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          {option.description}
+                        </p>
+                      </div>
+                      {index === 0 && (
+                        <kbd className="hidden sm:inline-flex px-2 py-1 bg-[var(--bg-surface-2)] border border-[var(--border-subtle)] rounded-[var(--radius-sm)] text-xs text-[var(--text-tertiary)] font-mono">
+                          Enter
+                        </kbd>
+                      )}
                     </div>
                   </motion.button>
                 ))}
               </div>
 
               {/* Keyboard hint */}
-              <p className="text-xs text-text-tertiary text-center mt-6">
-                Press <kbd className="px-2 py-1 bg-black-elevated rounded text-xs">Enter</kbd> for Solved, <kbd className="px-2 py-1 bg-black-elevated rounded text-xs">Esc</kbd> to close
+              <p className="text-xs text-[var(--text-tertiary)] text-center mt-4">
+                Press <kbd className="px-2 py-0.5 bg-[var(--bg-surface-2)] border border-[var(--border-subtle)] rounded-[var(--radius-sm)] text-xs font-mono">Enter</kbd> for Solved, <kbd className="px-2 py-0.5 bg-[var(--bg-surface-2)] border border-[var(--border-subtle)] rounded-[var(--radius-sm)] text-xs font-mono">Esc</kbd> to close
               </p>
             </Card>
           </motion.div>
