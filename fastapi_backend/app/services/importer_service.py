@@ -287,12 +287,24 @@ class ImporterService:
         for question in questions:
             # Generate titleSlug if not present (for CSV imports or missing data)
             title_slug = question.titleSlug
-            if not title_slug and question.title:
-                import re
-                # Remove special characters and convert to lowercase
-                slug = re.sub(r'[^\w\s-]', '', question.title.lower())
-                # Replace spaces with hyphens
-                title_slug = re.sub(r'[-\s]+', '-', slug).strip('-')
+            if not title_slug or not title_slug.strip():
+                if question.title:
+                    import re
+                    # Remove special characters and convert to lowercase
+                    slug = re.sub(r'[^\w\s-]', '', question.title.lower())
+                    # Replace spaces with hyphens
+                    title_slug = re.sub(r'[-\s]+', '-', slug).strip('-')
+                else:
+                    # Fallback: generate from link if available
+                    if question.link:
+                        title_slug = question.link.rstrip('/').split('/')[-1]
+                    else:
+                        # Last resort: use questionFrontendId
+                        title_slug = f"question-{question.questionFrontendId}"
+            
+            # Ensure titleSlug is set
+            if not title_slug:
+                title_slug = f"question-{question.questionFrontendId}"
             
             # Prepare question document
             question_doc = {
@@ -310,11 +322,11 @@ class ImporterService:
                 'updated_at': current_time
             }
             
-            # Check if question exists
+            # Check if question exists (use generated title_slug, not question.titleSlug)
             existing = await self.db.questions.find_one(
                 {
                     'source': question.source,
-                    'titleSlug': question.titleSlug
+                    'titleSlug': title_slug
                 }
             )
             
@@ -347,6 +359,7 @@ class ImporterService:
                     update_doc = {
                         '$set': {
                             'title': question.title,
+                            'titleSlug': title_slug,  # Ensure slug is updated
                             'difficulty': question.difficulty,
                             'frequency': question.frequency,
                             'acceptance_rate': question.acRate,
@@ -711,6 +724,26 @@ class ImporterService:
         company_legacy_id = company.get('legacy_id') if company else None
         
         for question in questions:
+            # Generate titleSlug if not present
+            title_slug = question.titleSlug
+            if not title_slug or not title_slug.strip():
+                if question.title:
+                    import re
+                    # Remove special characters and convert to lowercase
+                    slug = re.sub(r'[^\w\s-]', '', question.title.lower())
+                    # Replace spaces with hyphens
+                    title_slug = re.sub(r'[-\s]+', '-', slug).strip('-')
+                elif question.link:
+                    # Fallback: generate from link
+                    title_slug = question.link.rstrip('/').split('/')[-1]
+                else:
+                    # Last resort: use questionFrontendId
+                    title_slug = f"question-{question.questionFrontendId}"
+            
+            # Ensure titleSlug is set
+            if not title_slug:
+                title_slug = f"question-{question.questionFrontendId}"
+            
             # Check if question exists for this company and timeframe
             existing = await self.db.questions.find_one({
                 'link': question.link,
@@ -723,7 +756,7 @@ class ImporterService:
             
             update_doc = {
                 'title': question.title,
-                'titleSlug': question.titleSlug,
+                'titleSlug': title_slug,  # Use generated slug
                 'link': question.link,
                 'difficulty': question.difficulty,
                 'frequency': question.frequency or 0,

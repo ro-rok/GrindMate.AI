@@ -10,6 +10,10 @@ from ..auth import CurrentUser
 from ..services.streak_service import StreakService
 from ..services.analytics_service import AnalyticsService
 from ..services.encryption_service import get_encryption_service
+from ..services.security_question_service import (
+    get_security_question_by_id,
+    hash_security_answer,
+)
 
 
 router = APIRouter(tags=["users"])
@@ -70,6 +74,8 @@ class UserUpdateRequest(BaseModel):
     """Request model for updating user settings"""
     timezone: Optional[str] = None
     preferences: Optional[Dict[str, Any]] = None
+    security_question_id: Optional[int] = None
+    security_answer: Optional[str] = None
 
 
 class StreakInfo(BaseModel):
@@ -409,6 +415,24 @@ async def update_user_settings(
     
     if request.preferences is not None:
         update_data["preferences"] = request.preferences
+    
+    # Handle security question update
+    if request.security_question_id is not None:
+        if not request.security_answer:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Security answer is required when updating security question",
+            )
+        # Validate question ID exists
+        question = get_security_question_by_id(request.security_question_id)
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid security question ID",
+            )
+        # Hash the security answer
+        update_data["security_question_id"] = request.security_question_id
+        update_data["security_answer_hash"] = hash_security_answer(request.security_answer)
     
     if not update_data:
         raise HTTPException(

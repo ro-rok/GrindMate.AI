@@ -8,6 +8,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 // Lazy load page components for code splitting
 const Landing = lazy(() => import('../pages/Landing'));
 const Login = lazy(() => import('../pages/Login'));
+const ForgetPassword = lazy(() => import('../pages/ForgetPassword'));
 const Dashboard = lazy(() => import('../pages/Dashboard'));
 const CompanyList = lazy(() => import('../pages/CompanyList'));
 const QuestionList = lazy(() => import('../pages/QuestionList'));
@@ -57,6 +58,14 @@ const router = createBrowserRouter([
         element: (
           <SuspenseLayout>
             <Login />
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/forget-password',
+        element: (
+          <SuspenseLayout>
+            <ForgetPassword />
           </SuspenseLayout>
         ),
       },

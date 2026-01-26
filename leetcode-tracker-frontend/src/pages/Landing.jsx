@@ -292,7 +292,7 @@ function Landing() {
                       </div>
                       <div className="flex items-center gap-2 pl-6">
                         <span className="text-[var(--text-tertiary)] w-4">2</span>
-                        <span className="text-[var(--text-secondary)]">    seen = {}</span>
+                        <span className="text-[var(--text-secondary)]">    seen = {`{}`}</span>
                       </div>
                       <div className="flex items-center gap-2 pl-6">
                         <span className="text-[var(--text-tertiary)] w-4">3</span>

@@ -5,6 +5,7 @@ import useAuthStore from '../store/authStore';
 import useUIStore from '../store/uiStore';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import { SECURITY_QUESTIONS } from '../constants/securityQuestions';
 
 /**
  * Login/Register page
@@ -21,6 +22,8 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [securityQuestionId, setSecurityQuestionId] = useState('');
+  const [securityAnswer, setSecurityAnswer] = useState('');
   const [error, setError] = useState(null);
 
   // Redirect if already authenticated
@@ -66,7 +69,10 @@ function Login() {
       } else {
         // Get user's timezone
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        await register(email, password, timezone);
+        // Security question is optional but recommended
+        const questionId = securityQuestionId ? parseInt(securityQuestionId) : null;
+        const answer = securityAnswer.trim() || null;
+        await register(email, password, timezone, questionId, answer);
         showToast('Account created successfully!', 'success');
       }
     } catch (err) {
@@ -78,6 +84,8 @@ function Login() {
     setMode(mode === 'login' ? 'signup' : 'login');
     setError(null);
     setConfirmPassword('');
+    setSecurityQuestionId('');
+    setSecurityAnswer('');
   };
 
   return (
@@ -185,27 +193,71 @@ function Login() {
             </div>
 
             {mode === 'signup' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-              >
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-secondary mb-1">
-                  Confirm Password
-                </label>
-                <input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                  className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
-                  placeholder="••••••••"
-                  disabled={isLoading}
-                  aria-required="true"
-                />
-              </motion.div>
+              <>
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-secondary mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
+                    placeholder="••••••••"
+                    disabled={isLoading}
+                    aria-required="true"
+                  />
+                </motion.div>
+                
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <label htmlFor="securityQuestion" className="block text-sm font-medium text-text-secondary mb-1">
+                    Security Question (Optional but recommended for password recovery)
+                  </label>
+                  <select
+                    id="securityQuestion"
+                    value={securityQuestionId}
+                    onChange={(e) => setSecurityQuestionId(e.target.value)}
+                    className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
+                    disabled={isLoading}
+                  >
+                    <option value="">Select a security question...</option>
+                    {SECURITY_QUESTIONS.map((q) => (
+                      <option key={q.id} value={q.id}>
+                        {q.question}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {securityQuestionId && (
+                    <div>
+                      <label htmlFor="securityAnswer" className="block text-sm font-medium text-text-secondary mb-1">
+                        Security Answer
+                      </label>
+                      <input
+                        id="securityAnswer"
+                        type="text"
+                        value={securityAnswer}
+                        onChange={(e) => setSecurityAnswer(e.target.value)}
+                        className="w-full px-4 py-2 bg-black-elevated border border-border-subtle rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-primary focus:border-transparent transition-all"
+                        placeholder="Your answer"
+                        disabled={isLoading}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              </>
             )}
 
             <Button
@@ -224,6 +276,17 @@ function Login() {
                 mode === 'login' ? 'Sign In' : 'Create Account'
               )}
             </Button>
+            
+            {mode === 'login' && (
+              <div className="text-center">
+                <Link
+                  to="/forget-password"
+                  className="text-sm text-accent-primary hover:text-accent-primary-hover font-medium transition-colors focus:outline-none focus:underline"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+            )}
           </form>
 
           {/* Switch mode */}

@@ -62,14 +62,20 @@ const useAuthStore = create(
         }
       },
 
-      register: async (email, password, timezone) => {
+      register: async (email, password, timezone, securityQuestionId = null, securityAnswer = null) => {
         set({ isLoading: true, error: null });
         try {
+          const body = { email, password, timezone };
+          if (securityQuestionId !== null && securityAnswer !== null) {
+            body.security_question_id = securityQuestionId;
+            body.security_answer = securityAnswer;
+          }
+          
           const response = await fetch(`${import.meta.env.VITE_API_URL}/users.json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ email, password, timezone }),
+            body: JSON.stringify(body),
           });
 
           if (!response.ok) {
@@ -164,6 +170,54 @@ const useAuthStore = create(
       },
 
       clearError: () => set({ error: null }),
+
+      forgetPasswordInitiate: async (email) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/forget-password/initiate.json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ email }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to initiate password reset');
+          }
+
+          const data = await response.json();
+          set({ isLoading: false, error: null });
+          return data;
+        } catch (error) {
+          set({ error: error.message, isLoading: false });
+          throw error;
+        }
+      },
+
+      forgetPasswordVerify: async (email, securityAnswer, newPassword) => {
+        set({ isLoading: true, error: null });
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/forget-password/verify.json`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ email, security_answer: securityAnswer, new_password: newPassword }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to reset password');
+          }
+
+          const data = await response.json();
+          set({ isLoading: false, error: null });
+          return data;
+        } catch (error) {
+          set({ error: error.message, isLoading: false });
+          throw error;
+        }
+      },
 
       // Validate session on app load
       validateSession: async () => {

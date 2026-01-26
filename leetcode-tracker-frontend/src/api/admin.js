@@ -297,6 +297,19 @@ export async function getAuditLogs(params = {}) {
 }
 
 /**
+ * Populate all companies sequentially
+ * @returns {Promise<Object>} Populate all response with progress and results
+ */
+export async function populateAllCompanies() {
+  try {
+    const response = await api.post('/api/admin/companies/populate-all');
+    return { success: true, data: response.data };
+  } catch (error) {
+    return { success: false, error: handleError(error) };
+  }
+}
+
+/**
  * Export all admin API functions
  */
 const adminApi = {
@@ -311,6 +324,7 @@ const adminApi = {
   
   // Companies
   refreshCompany,
+  populateAllCompanies,
   
   // Questions
   getQuestions,

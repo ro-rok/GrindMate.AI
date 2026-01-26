@@ -52,7 +52,17 @@ class Settings(BaseSettings):
 
     # External APIs
     groq_api_key: str | None = os.getenv("GROQ_API_KEY")
+    groq_api_key_2: str | None = os.getenv("GROQ_API_KEY_2")
     groq_api_url: str = "https://api.groq.com/openai/v1/chat/completions"
+    
+    def get_available_groq_keys(self) -> List[str]:
+        """Get list of available Groq API keys (filters out None values)"""
+        keys = []
+        if self.groq_api_key:
+            keys.append(self.groq_api_key)
+        if self.groq_api_key_2:
+            keys.append(self.groq_api_key_2)
+        return keys
 
 
 @lru_cache

@@ -6,7 +6,8 @@ import Input from '../ui/Input';
 import LoadingSpinner from '../ui/LoadingSpinner';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import api from '../../api';
-import { refreshCompany } from '../../api/admin';
+import { refreshCompany, populateAllCompanies } from '../../api/admin';
+import useAdminCheck from '../../hooks/useAdminCheck';
 
 /**
  * CompaniesTab Component
@@ -21,6 +22,8 @@ import { refreshCompany } from '../../api/admin';
  * Requirements: 12.1, 12.2, 12.3
  */
 function CompaniesTab() {
+  const isAdmin = useAdminCheck();
+  
   // State management
   const [companies, setCompanies] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,6 +32,9 @@ function CompaniesTab() {
   const [refreshResults, setRefreshResults] = useState(null);
   const [showConfirmRefresh, setShowConfirmRefresh] = useState(false);
   const [companyToRefresh, setCompanyToRefresh] = useState(null);
+  const [populatingAll, setPopulatingAll] = useState(false);
+  const [populateAllResults, setPopulateAllResults] = useState(null);
+  const [showConfirmPopulateAll, setShowConfirmPopulateAll] = useState(false);
 
   /**
    * Fetch companies on mount
@@ -109,6 +115,41 @@ function CompaniesTab() {
   };
 
   /**
+   * Handle populate all companies
+   */
+  const handlePopulateAll = () => {
+    setShowConfirmPopulateAll(true);
+  };
+
+  /**
+   * Confirm populate all companies
+   */
+  const confirmPopulateAll = async () => {
+    setPopulatingAll(true);
+    setPopulateAllResults(null);
+    setShowConfirmPopulateAll(false);
+
+    try {
+      const result = await populateAllCompanies();
+
+      if (result.success) {
+        setPopulateAllResults(result.data);
+        toast.success(
+          `Populate All completed: ${result.data.completed} succeeded, ${result.data.failed} failed`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.error(result.error?.message || 'Populate All failed');
+      }
+    } catch (error) {
+      console.error('Populate All error:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setPopulatingAll(false);
+    }
+  };
+
+  /**
    * Filter companies based on search query
    * Requirement: 12.1
    */
@@ -120,13 +161,105 @@ function CompaniesTab() {
     <div className="space-y-6">
       {/* Header */}
       <Card className="p-6">
-        <h2 className="text-2xl font-bold text-text-primary mb-2">
-          Companies Management 🏢
-        </h2>
-        <p className="text-text-secondary">
-          Manage companies and refresh question data from GitHub CSV
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-text-primary mb-2">
+              Companies Management 🏢
+            </h2>
+            <p className="text-text-secondary">
+              Manage companies and refresh question data from GitHub CSV
+            </p>
+          </div>
+          {isAdmin && (
+            <Button
+              variant="primary"
+              onClick={handlePopulateAll}
+              disabled={populatingAll || isLoading}
+              loading={populatingAll}
+            >
+              {populatingAll ? 'Populating All...' : 'Populate All'}
+            </Button>
+          )}
+        </div>
       </Card>
+
+      {/* Populate All Results - Admin Only */}
+      {isAdmin && populateAllResults && (
+        <Card className="p-6 border-accent-primary">
+          <div className="flex items-start gap-3">
+            <svg
+              className="w-6 h-6 text-accent-primary flex-shrink-0 mt-0.5"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-accent-primary mb-2">
+                Populate All Complete
+              </h3>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="p-3 bg-black-elevated-hover rounded-lg border border-border-subtle">
+                  <p className="text-sm text-text-secondary mb-1">Total</p>
+                  <p className="text-2xl font-bold text-text-primary">
+                    {populateAllResults.total_companies}
+                  </p>
+                </div>
+                <div className="p-3 bg-black-elevated-hover rounded-lg border border-border-subtle">
+                  <p className="text-sm text-text-secondary mb-1">Completed</p>
+                  <p className="text-2xl font-bold text-accent-success">
+                    {populateAllResults.completed}
+                  </p>
+                </div>
+                <div className="p-3 bg-black-elevated-hover rounded-lg border border-border-subtle">
+                  <p className="text-sm text-text-secondary mb-1">Failed</p>
+                  <p className="text-2xl font-bold text-accent-danger">
+                    {populateAllResults.failed}
+                  </p>
+                </div>
+              </div>
+              
+              {populateAllResults.results && populateAllResults.results.length > 0 && (
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {populateAllResults.results.map((result, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-lg border ${
+                        result.status === 'success'
+                          ? 'bg-accent-success/10 border-accent-success/20'
+                          : 'bg-accent-danger/10 border-accent-danger/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-text-primary">{result.company_name}</span>
+                        <span className={`text-sm ${
+                          result.status === 'success' ? 'text-accent-success' : 'text-accent-danger'
+                        }`}>
+                          {result.status === 'success' ? '✓ Success' : '✗ Failed'}
+                        </span>
+                      </div>
+                      {result.status === 'success' && result.counts && (
+                        <div className="text-xs text-text-secondary mt-1">
+                          Updated: {result.counts.updated}, Inserted: {result.counts.inserted}, Removed: {result.counts.removed_marked}
+                        </div>
+                      )}
+                      {result.status === 'failed' && result.error && (
+                        <div className="text-xs text-accent-danger mt-1">
+                          {result.error}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Search Bar (Requirement 12.1) */}
       <Card className="p-6">
@@ -232,6 +365,21 @@ function CompaniesTab() {
         variant="warning"
         isLoading={!!refreshingCompanyId}
       />
+
+      {/* Confirmation Modal for Populate All - Admin Only */}
+      {isAdmin && (
+        <ConfirmationModal
+          isOpen={showConfirmPopulateAll}
+          onClose={() => setShowConfirmPopulateAll(false)}
+          onConfirm={confirmPopulateAll}
+          title="Populate All Companies"
+          message={`Are you sure you want to refresh all ${companies.length} companies? This will sequentially refresh each company from GitHub CSV and may take several minutes.`}
+          confirmLabel="Populate All"
+          cancelLabel="Cancel"
+          variant="warning"
+          isLoading={populatingAll}
+        />
+      )}
     </div>
   );
 }

@@ -39,6 +39,92 @@ class TutorService:
         self.rate_limit_service = get_rate_limit_service(self.db)
         self.encryption_service = get_encryption_service()
         
+    def _get_base_prompt(self, tutor_mode: str) -> str:
+        """
+        Get concise base prompt for tutor mode (~50-80 tokens).
+        Contains core role and primary goal only.
+        """
+        base_prompts = {
+            "socratic": "You are a Socratic coding tutor. Guide students through questions, not direct answers. Help them discover solutions themselves.",
+            "eli5": "You are a beginner-friendly coding tutor. Explain complex concepts using simple language and relatable analogies. Make learning accessible and encouraging.",
+            "interview": "You are a technical interview coach. Assess problem-solving skills, guide toward optimal solutions, and provide realistic interview feedback.",
+            "code_review": "You are a code review expert. Analyze code quality, identify improvements, and guide developers toward best practices."
+        }
+        return base_prompts.get(tutor_mode, base_prompts["socratic"])
+    
+    def _get_mode_core_guidelines(self, tutor_mode: str) -> str:
+        """
+        Get mode-specific core guidelines (~30-50 tokens).
+        Contains 2-3 essential principles for the mode.
+        """
+        guidelines = {
+            "socratic": "- Ask leading questions before hints\n- Build understanding incrementally\n- Only reveal solutions when explicitly requested",
+            "eli5": "- Use simple language and everyday analogies\n- Break concepts into bite-sized steps\n- Be patient and adapt explanations if needed",
+            "interview": "- Use technical terminology (Big-O, complexity)\n- Probe for edge cases and optimizations\n- Provide actionable feedback on code quality",
+            "code_review": "- Evaluate readability, performance, and best practices\n- Identify bugs and suggest optimizations\n- Provide specific, constructive feedback"
+        }
+        return guidelines.get(tutor_mode, guidelines["socratic"])
+    
+    def _get_code_analysis_section(self, tutor_mode: str) -> str:
+        """
+        Get code analysis section that appears when user_code is present (~30-40 tokens).
+        """
+        sections = {
+            "socratic": "When reviewing code: ask about their approach first, then guide toward improvements through questions.",
+            "eli5": "When reviewing code: explain issues simply with analogies, then suggest improvements step-by-step.",
+            "interview": "When reviewing code: assess approach, complexity, and style. Provide technical feedback with trade-offs.",
+            "code_review": "Analyze: code quality, performance, bugs, and best practices. Organize feedback into clear sections."
+        }
+        return sections.get(tutor_mode, sections["socratic"])
+    
+    def _get_output_format_guidelines(self, tutor_mode: str) -> str:
+        """
+        Get simplified output format guidelines (~15-20 tokens).
+        Only essential formatting instructions.
+        """
+        formats = {
+            "socratic": "Format: numbered steps, markdown code blocks, end with follow-up questions.",
+            "eli5": "Format: start with analogy, numbered steps, markdown, end with simple summary.",
+            "interview": "Format: structured sections, technical terms, actionable feedback, complexity analysis.",
+            "code_review": "Format: sections (Quality/Performance/Bugs/Best Practices), code examples, markdown."
+        }
+        return formats.get(tutor_mode, formats["socratic"])
+    
+    def _get_hint_level_guidance(self, hint_level: int) -> str:
+        """
+        Get hint level appropriate guidance (~20-30 tokens).
+        """
+        if hint_level <= 2:
+            return "At this level: focus on clarifying the problem and asking questions. No code examples."
+        elif hint_level <= 4:
+            return "At this level: you can discuss approach and pseudocode, but avoid full implementations."
+        else:
+            return "At this level: code examples and full solutions are allowed when requested."
+    
+    def _simplify_prompt(self, prompt: str) -> str:
+        """
+        Simplify prompt for ongoing conversations by removing redundant instructions.
+        Keeps core role and essential guidelines only.
+        """
+        # Extract just the first part (role/core) and remove detailed guidelines
+        lines = prompt.split('\n')
+        simplified = []
+        in_guidelines = False
+        
+        for line in lines:
+            if line.strip().startswith('##') or line.strip().startswith('**'):
+                if 'Guidelines' in line or 'Output Format' in line:
+                    in_guidelines = True
+                    continue
+                elif in_guidelines:
+                    continue
+            if not in_guidelines:
+                simplified.append(line)
+            elif line.strip() == '':
+                in_guidelines = False
+        
+        return '\n'.join(simplified).strip()
+    
     async def build_ai_prompt(
         self,
         question_context: Dict[str, Any],
@@ -46,10 +132,12 @@ class TutorService:
         language: Optional[str],
         message: str,
         tutor_mode: str,
-        chat_history: List[Dict[str, str]]
+        chat_history: List[Dict[str, str]],
+        unlocked_hints: Optional[List[int]] = None
     ) -> List[Dict[str, str]]:
         """
         Build structured AI prompt with question context and user attempt.
+        Uses conditional sections based on context to optimize token usage.
         
         Requirements: 2.2, 2.6, 5.1-5.5
         
@@ -58,8 +146,9 @@ class TutorService:
             user_code: Optional user's current code
             language: Optional programming language
             message: User's message
-            tutor_mode: Tutoring mode (socratic, eli5, interview)
+            tutor_mode: Tutoring mode (socratic, eli5, interview, code_review)
             chat_history: Previous conversation messages
+            unlocked_hints: Optional list of unlocked hint levels
             
         Returns:
             List of messages for Groq API in format:
@@ -71,58 +160,62 @@ class TutorService:
                 {"role": "user", "content": "..."}
             ]
         """
-        # Build system prompt based on tutor mode
-        system_prompts = {
-            "socratic": """You are a Socratic tutor for coding problems. Your goal is to guide students to discover solutions themselves through thoughtful questions and hints.
-
-Guidelines:
-- Ask leading questions rather than giving direct answers
-- Break down complex problems into smaller steps
-- Encourage critical thinking and pattern recognition
-- Provide hints progressively, starting with high-level concepts
-- Only reveal solutions when explicitly requested
-- Be encouraging and supportive""",
-            
-            "eli5": """You are a friendly tutor who explains coding concepts in simple, easy-to-understand terms. Your goal is to make complex algorithms accessible to beginners.
-
-Guidelines:
-- Use simple language and everyday analogies
-- Avoid jargon unless you explain it clearly
-- Break down concepts into bite-sized pieces
-- Use concrete examples and visualizations
-- Be patient and encouraging
-- Relate concepts to real-world scenarios""",
-            
-            "interview": """You are an experienced technical interviewer conducting a coding interview. Your goal is to assess the candidate's problem-solving approach and guide them toward optimal solutions.
-
-Guidelines:
-- Ask about their approach before they code
-- Probe for edge cases and complexity analysis
-- Guide them toward optimal solutions if they're stuck
-- Provide feedback on code quality and efficiency
-- Simulate a realistic interview environment
-- Be professional but supportive"""
-        }
+        # Start with concise base prompt
+        system_prompt = self._get_base_prompt(tutor_mode)
         
-        system_prompt = system_prompts.get(tutor_mode, system_prompts["socratic"])
+        # Add mode-specific core guidelines
+        system_prompt += f"\n\n{self._get_mode_core_guidelines(tutor_mode)}"
         
-        # Add question context to system prompt
+        # Conditional: Add code analysis section if user code is present
+        if user_code:
+            system_prompt += f"\n\n{self._get_code_analysis_section(tutor_mode)}"
+        
+        # Conditional: Add hint level guidance if available
+        if unlocked_hints and len(unlocked_hints) > 0:
+            max_level = max(unlocked_hints)
+            system_prompt += f"\n\n{self._get_hint_level_guidance(max_level)}"
+        
+        # Conditional: Add output format only for new conversations
+        if not chat_history or len(chat_history) < 2:
+            system_prompt += f"\n\n{self._get_output_format_guidelines(tutor_mode)}"
+        
+        # Simplify prompt for ongoing conversations (remove redundant instructions)
+        if chat_history and len(chat_history) > 3:
+            # Keep base and core, but simplify detailed sections
+            base = self._get_base_prompt(tutor_mode)
+            core = self._get_mode_core_guidelines(tutor_mode)
+            system_prompt = f"{base}\n\n{core}"
+            if user_code:
+                system_prompt += f"\n\n{self._get_code_analysis_section(tutor_mode)}"
+        
+        system_prompt = system_prompt.strip()
+        
+        # Add structured question context to system prompt
         system_prompt += f"""
 
-Current Problem Context:
-Title: {question_context['title']}
-Difficulty: {question_context['difficulty']}
-Topics: {', '.join(question_context['tags'][:5])}
-Link: {question_context['link']}
+---
 
-Problem Statement:
-{question_context['statement'][:1000]}"""  # Limit to 1000 chars to save tokens
+## Problem Context
+
+**Title:** {question_context['title']}
+**Difficulty:** {question_context['difficulty']}
+**Topics:** {', '.join(question_context['tags'][:5]) if question_context.get('tags') else 'N/A'}
+**Link:** {question_context['link']}
+
+**Problem Statement:**
+{question_context['statement'][:1000]}{'...' if len(question_context.get('statement', '')) > 1000 else ''}"""
         
         if question_context.get('constraints'):
-            system_prompt += f"\n\nConstraints:\n{question_context['constraints'][:500]}"
+            system_prompt += f"""
+
+**Constraints:**
+{question_context['constraints'][:500]}{'...' if len(question_context.get('constraints', '')) > 500 else ''}"""
         
         if question_context.get('examples'):
-            system_prompt += f"\n\nExamples:\n{question_context['examples'][:500]}"
+            system_prompt += f"""
+
+**Examples:**
+{question_context['examples'][:500]}{'...' if len(question_context.get('examples', '')) > 500 else ''}"""
         
         # Build user message with context
         user_message = message
@@ -446,6 +539,9 @@ Problem Statement:
             str(user_id), str(question_id), limit=5
         )
         
+        # Get unlocked hints for hint level context
+        unlocked_hints = await self.get_unlocked_hints(str(user_id), str(question_id))
+        
         # Build AI prompt with automatic context injection (Requirement 2.2, 2.6)
         messages = await self.build_ai_prompt(
             question_context=question_context,
@@ -453,7 +549,8 @@ Problem Statement:
             language=language,
             message=message,
             tutor_mode=tutor_mode,
-            chat_history=chat_history
+            chat_history=chat_history,
+            unlocked_hints=unlocked_hints if unlocked_hints else None
         )
         
         # Call Groq API (Requirement 4.1)
@@ -683,6 +780,18 @@ Guidance for this level:
         
         return None
     
+    def _get_server_api_keys(self) -> List[str]:
+        """
+        Get list of available server API keys (filters out None values).
+        Returns keys in priority order: GROQ_API_KEY first, then GROQ_API_KEY_2.
+        """
+        keys = []
+        if self.settings.groq_api_key:
+            keys.append(self.settings.groq_api_key)
+        if self.settings.groq_api_key_2:
+            keys.append(self.settings.groq_api_key_2)
+        return keys
+    
     async def _call_groq_api(
         self,
         system_prompt: str,
@@ -691,29 +800,34 @@ Guidance for this level:
         history: Optional[List[Dict[str, str]]] = None
     ) -> Dict[str, Any]:
         """
-        Call Groq API with rate limiting
+        Call Groq API with rate limiting and dual key fallback support.
         
-        Returns dict with content and tokens_used
+        Returns dict with content and tokens_used.
+        Uses BYOK key if available, otherwise tries server keys with fallback.
         """
         # Get user to check for BYOK key
         user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
         
-        # Determine which API key to use
-        api_key = None
+        # Determine which API keys to use
+        api_keys_to_try = []
+        is_byok = False
+        
         if user and user.get("byok_groq_key"):
-            # Decrypt user's BYOK key
+            # Decrypt user's BYOK key - highest priority
             encrypted_key = user["byok_groq_key"]
             api_key = self.encryption_service.decrypt_api_key(encrypted_key)
             if not api_key:
                 raise RuntimeError("Failed to decrypt BYOK API key")
+            api_keys_to_try = [api_key]
+            is_byok = True
         else:
-            # Use server key
-            api_key = self.settings.groq_api_key
-            if not api_key:
-                raise RuntimeError("GROQ_API_KEY is not configured")
+            # Use server keys with fallback
+            api_keys_to_try = self._get_server_api_keys()
+            if not api_keys_to_try:
+                raise RuntimeError("No GROQ API keys configured. Please set GROQ_API_KEY or GROQ_API_KEY_2")
         
         # Check rate limit (BYOK users bypass this)
-        if not (user and user.get("byok_groq_key")):
+        if not is_byok:
             await self._check_rate_limit(user_id)
         
         # Build messages
@@ -725,12 +839,7 @@ Guidance for this level:
         
         messages.append({"role": "user", "content": user_prompt})
         
-        # Call API
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
+        # Prepare request body
         body = {
             "model": "llama-3.1-8b-instant",
             "messages": messages,
@@ -738,28 +847,55 @@ Guidance for this level:
             "max_tokens": 2048
         }
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                self.settings.groq_api_url,
-                headers=headers,
-                json=body
-            )
+        # Try each API key with fallback
+        last_error = None
+        for api_key in api_keys_to_try:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        self.settings.groq_api_url,
+                        headers=headers,
+                        json=body
+                    )
+                
+                if response.status_code == 200:
+                    # Success - parse and return
+                    data = response.json()
+                    content = data["choices"][0]["message"]["content"]
+                    tokens_used = data.get("usage", {}).get("total_tokens", 0)
+                    
+                    # Update rate limit (only for non-BYOK users)
+                    if not is_byok:
+                        await self._update_rate_limit(user_id, tokens_used)
+                    
+                    return {
+                        "content": content,
+                        "tokens_used": tokens_used
+                    }
+                else:
+                    # API error - try next key if available for retryable errors
+                    last_error = f"Groq API error: {response.status_code} - {response.text}"
+                    # Retryable errors: rate limit (429), server errors (5xx), service unavailable (503)
+                    retryable_errors = [429, 500, 502, 503, 504]
+                    if response.status_code in retryable_errors and len(api_keys_to_try) > 1:
+                        continue
+                    # Otherwise, raise the error
+                    raise RuntimeError(last_error)
+                    
+            except httpx.HTTPError as e:
+                # Network error - try next key if available
+                last_error = f"Network error: {str(e)}"
+                if len(api_keys_to_try) > 1:
+                    continue
+                raise RuntimeError(last_error)
         
-        if response.status_code != 200:
-            raise RuntimeError(f"Groq API error: {response.status_code} - {response.text}")
-        
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        tokens_used = data.get("usage", {}).get("total_tokens", 0)
-        
-        # Update rate limit (only for non-BYOK users)
-        if not (user and user.get("byok_groq_key")):
-            await self._update_rate_limit(user_id, tokens_used)
-        
-        return {
-            "content": content,
-            "tokens_used": tokens_used
-        }
+        # All keys failed
+        raise RuntimeError(f"All API keys failed. Last error: {last_error}")
     
     async def _call_groq_api_with_messages(
         self,
@@ -767,35 +903,35 @@ Guidance for this level:
         user_id: str
     ) -> Dict[str, Any]:
         """
-        Call Groq API with pre-built messages array.
+        Call Groq API with pre-built messages array and dual key fallback support.
         
         Used by send_chat_message for the new flow.
         
-        Returns dict with content and tokens_used
+        Returns dict with content and tokens_used.
+        Uses BYOK key if available, otherwise tries server keys with fallback.
         """
         # Get user to check for BYOK key
         user = await self.db["users"].find_one({"_id": ObjectId(user_id)})
         
-        # Determine which API key to use
-        api_key = None
+        # Determine which API keys to use
+        api_keys_to_try = []
+        is_byok = False
+        
         if user and user.get("byok_groq_key"):
-            # Decrypt user's BYOK key
+            # Decrypt user's BYOK key - highest priority
             encrypted_key = user["byok_groq_key"]
             api_key = self.encryption_service.decrypt_api_key(encrypted_key)
             if not api_key:
                 raise RuntimeError("Failed to decrypt BYOK API key")
+            api_keys_to_try = [api_key]
+            is_byok = True
         else:
-            # Use server key
-            api_key = self.settings.groq_api_key
-            if not api_key:
-                raise RuntimeError("GROQ_API_KEY is not configured")
+            # Use server keys with fallback
+            api_keys_to_try = self._get_server_api_keys()
+            if not api_keys_to_try:
+                raise RuntimeError("No GROQ API keys configured. Please set GROQ_API_KEY or GROQ_API_KEY_2")
         
-        # Call API
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
+        # Prepare request body
         body = {
             "model": "llama-3.1-8b-instant",
             "messages": messages,
@@ -803,31 +939,58 @@ Guidance for this level:
             "max_tokens": 2048
         }
         
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                self.settings.groq_api_url,
-                headers=headers,
-                json=body
-            )
+        # Try each API key with fallback
+        last_error = None
+        for api_key in api_keys_to_try:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        self.settings.groq_api_url,
+                        headers=headers,
+                        json=body
+                    )
+                
+                if response.status_code == 200:
+                    # Success - parse and return
+                    data = response.json()
+                    content = data["choices"][0]["message"]["content"]
+                    tokens_used = data.get("usage", {}).get("total_tokens", 0)
+                    
+                    # Update rate limit (only for non-BYOK users)
+                    if not is_byok:
+                        user_timezone = user.get("timezone", "UTC") if user else "UTC"
+                        await self.rate_limit_service.consume_budget(
+                            user_id, tokens_used, user_timezone
+                        )
+                    
+                    return {
+                        "content": content,
+                        "tokens_used": tokens_used
+                    }
+                else:
+                    # API error - try next key if available for retryable errors
+                    last_error = f"Groq API error: {response.status_code} - {response.text}"
+                    # Retryable errors: rate limit (429), server errors (5xx), service unavailable (503)
+                    retryable_errors = [429, 500, 502, 503, 504]
+                    if response.status_code in retryable_errors and len(api_keys_to_try) > 1:
+                        continue
+                    # Otherwise, raise the error
+                    raise RuntimeError(last_error)
+                    
+            except httpx.HTTPError as e:
+                # Network error - try next key if available
+                last_error = f"Network error: {str(e)}"
+                if len(api_keys_to_try) > 1:
+                    continue
+                raise RuntimeError(last_error)
         
-        if response.status_code != 200:
-            raise RuntimeError(f"Groq API error: {response.status_code} - {response.text}")
-        
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
-        tokens_used = data.get("usage", {}).get("total_tokens", 0)
-        
-        # Update rate limit (only for non-BYOK users)
-        if not (user and user.get("byok_groq_key")):
-            user_timezone = user.get("timezone", "UTC") if user else "UTC"
-            await self.rate_limit_service.consume_budget(
-                user_id, tokens_used, user_timezone
-            )
-        
-        return {
-            "content": content,
-            "tokens_used": tokens_used
-        }
+        # All keys failed
+        raise RuntimeError(f"All API keys failed. Last error: {last_error}")
     
     async def _get_or_create_session(
         self,

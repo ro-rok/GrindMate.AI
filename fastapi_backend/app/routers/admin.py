@@ -105,6 +105,14 @@ class CompanyRefreshResponse(BaseModel):
     counts: Dict[str, int]
 
 
+class PopulateAllResponse(BaseModel):
+    """Response for populate all companies"""
+    total_companies: int
+    completed: int
+    failed: int
+    results: List[Dict[str, Any]]  # List of {company_id, company_name, status, counts?, error?}
+
+
 class QuestionUpdateRequest(BaseModel):
     """Request body for question update"""
     difficulty: Optional[str] = None
@@ -734,6 +742,114 @@ async def refresh_company(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to refresh company questions"
+        )
+
+
+@router.post("/companies/populate-all", response_model=PopulateAllResponse)
+async def populate_all_companies(
+    request: Request,
+    admin_user: AdminUser,
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Refresh all companies sequentially.
+    
+    Goes through all companies one by one and triggers CSV refresh for each.
+    Returns progress information including which companies succeeded/failed.
+    
+    This is a long-running operation that may take several minutes.
+    """
+    try:
+        # Get all companies
+        companies_cursor = db["companies"].find({})
+        companies = await companies_cursor.to_list(length=None)
+        
+        if not companies:
+            return PopulateAllResponse(
+                total_companies=0,
+                completed=0,
+                failed=0,
+                results=[]
+            )
+        
+        total_companies = len(companies)
+        completed = 0
+        failed = 0
+        results = []
+        
+        # Process each company sequentially
+        for company in companies:
+            company_id = str(company["_id"])
+            company_name = company.get("name", "Unknown")
+            
+            try:
+                # Track counts before refresh
+                questions_before = await db["questions"].count_documents({"company_id": company["_id"]})
+                
+                # Call refresh function
+                await refresh_company_questions(company_id)
+                
+                # Track counts after refresh
+                questions_after = await db["questions"].count_documents({"company_id": company["_id"]})
+                removed_count = await db["questions"].count_documents({
+                    "company_id": company["_id"],
+                    "metadata.removed_on": {"$exists": True}
+                })
+                
+                # Calculate counts (approximate)
+                inserted = max(0, questions_after - questions_before)
+                updated = questions_before - removed_count
+                
+                counts = {
+                    "updated": updated,
+                    "inserted": inserted,
+                    "removed_marked": removed_count
+                }
+                
+                results.append({
+                    "company_id": company_id,
+                    "company_name": company_name,
+                    "status": "success",
+                    "counts": counts
+                })
+                completed += 1
+                
+            except Exception as e:
+                # Log error but continue with next company
+                error_msg = str(e)
+                results.append({
+                    "company_id": company_id,
+                    "company_name": company_name,
+                    "status": "failed",
+                    "error": error_msg
+                })
+                failed += 1
+        
+        # Log audit event
+        audit_logger = AuditLoggerService(db)
+        await audit_logger.log_action(
+            actor_user_id=admin_user.id,
+            actor_email=admin_user.email,
+            action="populate_all_companies",
+            metadata={
+                "total_companies": total_companies,
+                "completed": completed,
+                "failed": failed
+            },
+            request=request
+        )
+        
+        return PopulateAllResponse(
+            total_companies=total_companies,
+            completed=completed,
+            failed=failed,
+            results=results
+        )
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to populate all companies: {str(e)}"
         )
 
 

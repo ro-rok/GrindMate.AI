@@ -8,6 +8,8 @@ class UserInCreate(BaseModel):
     email: EmailStr
     password: str
     timezone: Optional[str] = "UTC"
+    security_question_id: Optional[int] = None
+    security_answer: Optional[str] = None
 
 
 class UserInLogin(BaseModel):
@@ -34,6 +36,7 @@ class UserPublic(MongoModel):
     tutor_mode: str = "socratic"
     is_premium: bool = False
     preferences: UserPreferences = UserPreferences()
+    security_question_id: Optional[int] = None
 
 
 class UserInDB(MongoModel):
@@ -52,5 +55,7 @@ class UserInDB(MongoModel):
     tutor_mode: str = "socratic"
     is_premium: bool = False
     preferences: Dict[str, Any] = {"reduced_motion": False, "theme": "dark"}
+    security_question_id: Optional[int] = None
+    security_answer_hash: Optional[str] = None
 
 

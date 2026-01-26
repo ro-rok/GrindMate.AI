@@ -31,7 +31,7 @@ class HintUnlockResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User's message to the AI tutor")
-    tutor_mode: str = Field(default="socratic", description="Tutoring mode: socratic, eli5, or interviewer")
+    tutor_mode: str = Field(default="socratic", description="Tutoring mode: socratic, eli5, or interview")
     code: Optional[str] = Field(default=None, description="Optional code snippet from user")
 
 
@@ -150,7 +150,7 @@ async def chat_with_tutor(
     Requirements: 6.1-6.9, 7.1-7.7
     """
     # Validate tutor mode
-    valid_modes = ["socratic", "eli5", "interviewer"]
+    valid_modes = ["socratic", "eli5", "interview"]
     if request.tutor_mode not in valid_modes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -29,7 +29,7 @@ router = APIRouter(prefix="/tutor", tags=["tutor-v2"])
 class TutorChatRequest(BaseModel):
     question_id: str = Field(..., description="Question ID")
     message: str = Field(..., description="User's message to the AI tutor")
-    tutor_mode: str = Field(..., description="Tutoring mode: socratic, eli5, or interview")
+    tutor_mode: str = Field(..., description="Tutoring mode: socratic, eli5, interview, or code_review")
     user_code: Optional[str] = Field(default=None, description="Optional user code")
     language: Optional[str] = Field(default=None, description="Programming language")
 
@@ -168,7 +168,7 @@ async def chat_with_tutor(
     
     Validates:
     - Required fields (question_id, message, tutor_mode)
-    - Tutor mode is valid (socratic, eli5, interview)
+    - Tutor mode is valid (socratic, eli5, interview, code_review)
     
     Returns:
     - HTTP 200: Successful response with AI message
@@ -200,7 +200,7 @@ async def chat_with_tutor(
         )
     
     # Validate tutor_mode (Requirement 13.4)
-    valid_modes = ["socratic", "eli5", "interview"]
+    valid_modes = ["socratic", "eli5", "interview", "code_review"]
     if request.tutor_mode not in valid_modes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -12,6 +12,7 @@ import ConfirmationModal from '../components/ui/ConfirmationModal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import TutorSessionHistory from '../components/tutor/TutorSessionHistory';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { SECURITY_QUESTIONS, getSecurityQuestionById } from '../constants/securityQuestions';
 
 /**
  * Profile page
@@ -44,6 +45,11 @@ function Profile() {
   const [savingByok, setSavingByok] = useState(false);
   const [byokEnabled, setByokEnabled] = useState(false);
   
+  // Security question state
+  const [securityQuestionId, setSecurityQuestionId] = useState(user?.security_question_id || '');
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [savingSecurityQuestion, setSavingSecurityQuestion] = useState(false);
+  
   // Modals
   const [showResetModal, setShowResetModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -53,6 +59,13 @@ function Profile() {
   useEffect(() => {
     fetchProfileData();
   }, []);
+
+  // Update security question ID when user changes
+  useEffect(() => {
+    if (user?.security_question_id) {
+      setSecurityQuestionId(user.security_question_id.toString());
+    }
+  }, [user?.security_question_id]);
 
   const fetchProfileData = async () => {
     try {
@@ -103,6 +116,40 @@ function Profile() {
       toast.error('Failed to save settings');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSaveSecurityQuestion = async () => {
+    if (!securityQuestionId) {
+      toast.error('Please select a security question');
+      return;
+    }
+    if (!securityAnswer.trim()) {
+      toast.error('Please enter a security answer');
+      return;
+    }
+
+    try {
+      setSavingSecurityQuestion(true);
+      
+      await api.patch('/users/me', {
+        security_question_id: parseInt(securityQuestionId),
+        security_answer: securityAnswer,
+      });
+      
+      // Update local user state
+      setUser({
+        ...user,
+        security_question_id: parseInt(securityQuestionId),
+      });
+      
+      setSecurityAnswer(''); // Clear answer for security
+      toast.success('Security question updated successfully');
+    } catch (error) {
+      console.error('Failed to save security question:', error);
+      toast.error(error.response?.data?.detail || 'Failed to save security question');
+    } finally {
+      setSavingSecurityQuestion(false);
     }
   };
 
@@ -372,11 +419,85 @@ function Profile() {
           </Card>
         </motion.div>
 
-        {/* BYOK API Key - Premium Card */}
+        {/* Security Question */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          <Card className="p-5">
+            <Card.Header className="p-0 pb-4">
+              <Card.Title>Security Question</Card.Title>
+            </Card.Header>
+            <div className="space-y-4">
+              {user?.security_question_id ? (
+                <div className="p-3 bg-[var(--bg-surface-2)] rounded-[var(--radius-md)] border border-[var(--border-subtle)]">
+                  <div className="text-xs text-[var(--text-tertiary)] mb-1">Current Question</div>
+                  <div className="text-sm font-medium text-[var(--text-primary)]">
+                    {getSecurityQuestionById(user.security_question_id)?.question || 'Unknown question'}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-[var(--accent-warning-light)] border border-[var(--border-warning)] rounded-[var(--radius-md)]">
+                  <div className="text-sm text-[var(--accent-warning)]">
+                    ⚠️ No security question set. Set one to enable password recovery.
+                  </div>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                  {user?.security_question_id ? 'Update Security Question' : 'Set Security Question'}
+                </label>
+                <select
+                  value={securityQuestionId}
+                  onChange={(e) => setSecurityQuestionId(e.target.value)}
+                  className="w-full px-4 py-2 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:border-[var(--accent-primary)]"
+                >
+                  <option value="">Select a security question...</option>
+                  {SECURITY_QUESTIONS.map((q) => (
+                    <option key={q.id} value={q.id}>
+                      {q.question}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {securityQuestionId && (
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                    Your Answer
+                  </label>
+                  <Input
+                    type="text"
+                    value={securityAnswer}
+                    onChange={(e) => setSecurityAnswer(e.target.value)}
+                    placeholder="Enter your answer"
+                    className="w-full"
+                  />
+                  <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                    This answer will be used to verify your identity when resetting your password.
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={handleSaveSecurityQuestion}
+                loading={savingSecurityQuestion}
+                disabled={!securityQuestionId || !securityAnswer.trim()}
+                className="w-full md:w-auto"
+              >
+                {user?.security_question_id ? 'Update Security Question' : 'Set Security Question'}
+              </Button>
+            </div>
+          </Card>
+        </motion.div>
+
+        {/* BYOK API Key - Premium Card */}
+        <motion.div
+          initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.6 }}
         >
           <Card variant="glass" className="p-5 border-[var(--border-brand)]">
             <div className="flex items-start justify-between mb-4">
