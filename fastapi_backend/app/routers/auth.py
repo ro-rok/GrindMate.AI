@@ -32,7 +32,13 @@ from ..services.security_question_service import (
 router = APIRouter(tags=["auth"])
 
 
-def set_auth_cookies(response: Response, access_token: str, refresh_token: str, csrf_token: str):
+def set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str,
+    csrf_token: str,
+    request: Request | None = None,
+):
     """
     Set authentication cookies (access token, refresh token, CSRF token).
     
@@ -44,12 +50,14 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
     """
     settings = get_settings()
 
-    # Determine cookie security settings based on backend URL.
-    # - In production (HTTPS), we need SameSite=None; Secure for cross-site requests
-    #   from the Vercel frontend (different origin).
-    # - In local development (http://localhost), Secure cookies would be ignored by
-    #   the browser, so we fall back to SameSite=Lax without Secure.
-    backend_is_https = settings.backend_base_url.startswith("https://")
+    # Determine cookie security settings.
+    # Prefer the actual request scheme when available (so production behind HTTPS
+    # works even if BACKEND_BASE_URL is misconfigured). Fall back to
+    # backend_base_url for environments where Request is not passed.
+    if request is not None:
+        backend_is_https = request.url.scheme == "https"
+    else:
+        backend_is_https = settings.backend_base_url.startswith("https://")
     cookie_secure = backend_is_https
     cookie_samesite = "none" if backend_is_https else "lax"
 
@@ -162,7 +170,7 @@ async def register_user(
     await store_refresh_token(db, user_id, refresh_token_str, token_family_id)
     
     # Set cookies
-    set_auth_cookies(response, access_token, refresh_token_str, csrf_token)
+    set_auth_cookies(response, access_token, refresh_token_str, csrf_token, request=request)
     
     # Return user data with CSRF token in body
     user_public = UserPublic(**doc, id=doc["_id"])
@@ -215,7 +223,7 @@ async def login_user(
     await store_refresh_token(db, user_id, refresh_token_str, token_family_id)
     
     # Set cookies
-    set_auth_cookies(response, access_token, refresh_token_str, csrf_token)
+    set_auth_cookies(response, access_token, refresh_token_str, csrf_token, request=request)
     
     # Return user data with CSRF token in body
     user_public = UserPublic(id=user.id, email=user.email, legacy_id=user.legacy_id)
@@ -268,7 +276,7 @@ async def refresh_token(
     new_csrf_token = create_refresh_token()
     
     # Set new cookies
-    set_auth_cookies(response, new_access_token, new_refresh_token, new_csrf_token)
+    set_auth_cookies(response, new_access_token, new_refresh_token, new_csrf_token, request=request)
     
     return {
         "message": "Token refreshed successfully",
