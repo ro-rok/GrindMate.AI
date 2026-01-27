@@ -1,5 +1,5 @@
 import React from 'react';
-import { useWakeBackend } from '../hooks/useWakeBackend';
+import { useWakeBackend } from '../hooks/useWakeBackend.jsx';
 
 /**
  * Global provider that wires the "wake backend" cursor/visibility listener

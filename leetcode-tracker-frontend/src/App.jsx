@@ -14,7 +14,7 @@ import { toast } from 'react-hot-toast'
 import { format } from 'date-fns'
 import { FaTimes} from 'react-icons/fa'
 import { getCachedQuestions, setCachedQuestions } from './storage'
-import { useWakeBackend } from './hooks/useWakeBackend'
+import { useWakeBackend } from './hooks/useWakeBackend.jsx'
 
 
 function SearchBar({ value, onChange }) {
