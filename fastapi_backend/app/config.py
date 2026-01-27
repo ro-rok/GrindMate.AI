@@ -31,7 +31,12 @@ class Settings(BaseSettings):
     backend_base_url: str = os.getenv("BACKEND_BASE_URL", "http://localhost:8000")
     frontend_origins: str = os.getenv(
         "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://localhost:3000,https://grindmate-ai.vercel.app"
+        (
+            "http://localhost:5173,"
+            "http://localhost:3000,"
+            "https://grindmate-ai.vercel.app,"
+            "https://ro-port.vercel.app"
+        ),
     )
 
     @property
@@ -42,12 +47,14 @@ class Settings(BaseSettings):
             return items if items else [
                 "http://localhost:5173",
                 "http://localhost:3000",
-                "https://grindmate-ai.vercel.app"
+                "https://grindmate-ai.vercel.app",
+                "https://ro-port.vercel.app",
             ]
         return [
             "http://localhost:5173",
             "http://localhost:3000",
-            "https://grindmate-ai.vercel.app"
+            "https://grindmate-ai.vercel.app",
+            "https://ro-port.vercel.app",
         ]
 
     # External APIs

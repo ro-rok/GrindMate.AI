@@ -43,14 +43,23 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         csrf_token: CSRF token
     """
     settings = get_settings()
-    
+
+    # Determine cookie security settings based on backend URL.
+    # - In production (HTTPS), we need SameSite=None; Secure for cross-site requests
+    #   from the Vercel frontend (different origin).
+    # - In local development (http://localhost), Secure cookies would be ignored by
+    #   the browser, so we fall back to SameSite=Lax without Secure.
+    backend_is_https = settings.backend_base_url.startswith("https://")
+    cookie_secure = backend_is_https
+    cookie_samesite = "none" if backend_is_https else "lax"
+
     # Set access token cookie (15 minutes)
     response.set_cookie(
         key=settings.access_token_cookie_name,
         value=access_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=cookie_secure,
+        samesite=cookie_samesite,
         max_age=settings.access_token_expire_minutes * 60,
     )
     
@@ -59,8 +68,8 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         key=settings.refresh_token_cookie_name,
         value=refresh_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=cookie_secure,
+        samesite=cookie_samesite,
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
     )
     
@@ -69,8 +78,8 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str, 
         key=settings.csrf_token_cookie_name,
         value=csrf_token,
         httponly=False,  # JS needs to read this
-        secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        secure=cookie_secure,
+        samesite=cookie_samesite,
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
     )
 

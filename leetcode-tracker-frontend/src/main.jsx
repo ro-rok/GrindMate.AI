@@ -4,10 +4,10 @@ import { RouterProvider } from 'react-router-dom';
 import router from './router';
 import './index.css';
 import './styles/tokens.css';
-import { Analytics } from "@vercel/analytics/react"
 import { Toaster } from 'react-hot-toast';
 import { LenisProvider } from './components/LenisProvider';
 import SessionValidator from './components/SessionValidator';
+import BackendWakeProvider from './components/BackendWakeProvider';
 import { initGSAP } from './utils/gsap';
 
 // Initialize GSAP with global defaults
@@ -16,6 +16,8 @@ initGSAP();
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <LenisProvider>
+      {/* Global backend wake/ping listener (shows toast when backend is cold) */}
+      <BackendWakeProvider />
       <Toaster
         position="top-right"
         toastOptions={{
@@ -46,7 +48,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       />
       <SessionValidator />
       <RouterProvider router={router} />
-      <Analytics />
     </LenisProvider>
   </React.StrictMode>
 );
