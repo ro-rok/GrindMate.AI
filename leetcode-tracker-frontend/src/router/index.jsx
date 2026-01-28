@@ -16,6 +16,7 @@ const FocusMode = lazy(() => import('../pages/FocusMode'));
 const Profile = lazy(() => import('../pages/Profile'));
 const AdminPortal = lazy(() => import('../pages/AdminPortal'));
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard'));
+const NotFound = lazy(() => import('../pages/NotFound'));
 
 // Layout wrapper with Suspense
 function SuspenseLayout({ children }) {
@@ -149,10 +150,14 @@ const router = createBrowserRouter([
       },
     ],
   },
-  // Catch-all redirect
+  // Catch-all 404 page
   {
     path: '*',
-    element: <Navigate to="/" replace />,
+    element: (
+      <SuspenseLayout>
+        <NotFound />
+      </SuspenseLayout>
+    ),
   },
 ]);
 

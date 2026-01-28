@@ -152,7 +152,10 @@ const useAuthStore = create(
           
           // Update user data if included in response
           if (data.user) {
-            set({ user: data.user });
+            set({ 
+              user: data.user,
+              isAuthenticated: true 
+            });
           }
 
           return true;
@@ -221,15 +224,9 @@ const useAuthStore = create(
 
       // Validate session on app load
       validateSession: async () => {
-        const state = get();
-        
-        // If not authenticated in state, nothing to validate
-        if (!state.isAuthenticated) {
-          return false;
-        }
-        
         try {
-          // Try to refresh the token to validate session
+          // Always try to refresh the token to validate session
+          // This works even if the server was restarted, as long as refresh token cookie exists
           const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/refresh`, {
             method: 'POST',
             credentials: 'include',
@@ -241,6 +238,37 @@ const useAuthStore = create(
             // Update CSRF token if provided
             if (data.csrf_token) {
               localStorage.setItem('csrf_token', data.csrf_token);
+            }
+            
+            // Restore user session if user data is provided
+            if (data.user) {
+              set({
+                user: data.user,
+                isAuthenticated: true,
+                error: null,
+              });
+            } else {
+              // If no user data but refresh succeeded, session is valid
+              // Keep existing state if authenticated, otherwise mark as authenticated
+              const currentState = get();
+              if (!currentState.isAuthenticated) {
+                // Try to get user from /users/current endpoint
+                try {
+                  const userResponse = await fetch(`${import.meta.env.VITE_API_URL}/users/current.json`, {
+                    credentials: 'include',
+                  });
+                  if (userResponse.ok) {
+                    const userData = await userResponse.json();
+                    set({
+                      user: userData,
+                      isAuthenticated: true,
+                      error: null,
+                    });
+                  }
+                } catch (e) {
+                  // Ignore errors, session is still valid
+                }
+              }
             }
             
             // Session is valid
@@ -257,12 +285,17 @@ const useAuthStore = create(
           }
         } catch (error) {
           // Network error or session invalid
-          set({
-            user: null,
-            isAuthenticated: false,
-            error: null,
-          });
-          localStorage.removeItem('csrf_token');
+          // Only clear state if we were previously authenticated
+          // This prevents clearing state on initial load when there's no session
+          const currentState = get();
+          if (currentState.isAuthenticated) {
+            set({
+              user: null,
+              isAuthenticated: false,
+              error: null,
+            });
+            localStorage.removeItem('csrf_token');
+          }
           return false;
         }
       },

@@ -57,9 +57,20 @@ function QuestionList() {
         const response = await api.get(`/companies/${companyId}`);
         console.log('Company data received:', response.data);
         setCompany(response.data);
+        setError(null); // Clear any previous errors
       } catch (err) {
         console.error('Failed to fetch company:', err);
-        setError('Failed to load company details');
+        
+        // Provide specific error messages based on status code
+        if (err.response?.status === 404) {
+          setError(`Company "${companyId}" not found. It may have been removed or the ID is incorrect.`);
+        } else if (err.response?.status === 401) {
+          setError('Authentication required to view this company.');
+        } else if (err.response?.status === 400) {
+          setError(`Invalid company ID format: "${companyId}"`);
+        } else {
+          setError('Failed to load company details. Please try again later.');
+        }
       }
     };
 
@@ -347,15 +358,30 @@ function QuestionList() {
   if (error && !company) {
     return (
       <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center p-[var(--space-8)]">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-[var(--space-4)]">
-            Failed to Load Company
-          </h2>
-          <p className="text-text-secondary mb-6">{error}</p>
-          <Button variant="primary" onClick={() => window.location.reload()}>
-            Retry
-          </Button>
-        </div>
+        <Card className="p-8 text-center max-w-2xl">
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+              Company Not Found
+            </h2>
+            <p className="text-[var(--text-secondary)] mb-2">{error}</p>
+            {companyId && (
+              <p className="text-sm text-[var(--text-tertiary)] mt-2 font-mono">
+                {companyId}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button variant="primary" onClick={() => navigate('/companies')}>
+              Browse Companies
+            </Button>
+            <Button variant="secondary" onClick={() => navigate('/')}>
+              Go Home
+            </Button>
+            <Button variant="secondary" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }

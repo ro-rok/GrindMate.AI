@@ -150,39 +150,98 @@ function TutorPanel({
     'Walkthrough',
   ];
 
-  // Action buttons configuration
-  const actionButtons = [
+  // Action buttons configuration - contextual based on user code and mode
+  const hasCode = userCode && userCode.trim().length > 0;
+  const baseActions = [
     { 
       action: 'hint', 
       label: 'Give Hint', 
       icon: '💡', 
-      description: 'Get a subtle hint without revealing too much' 
+      description: 'Get a subtle hint without revealing too much',
+      category: 'hints'
     },
     { 
       action: 'approach', 
       label: 'Explain Approach', 
       icon: '🎯', 
-      description: 'Learn about the general approach to solve this' 
+      description: 'Learn about the general approach to solve this',
+      category: 'learning'
     },
     { 
       action: 'edge_cases', 
       label: 'Edge Cases', 
       icon: '🔍', 
-      description: 'Discover important edge cases to consider' 
+      description: 'Discover important edge cases to consider',
+      category: 'learning'
     },
     { 
       action: 'complexity', 
       label: 'Complexity Analysis', 
       icon: '📊', 
-      description: 'Understand time and space complexity' 
+      description: 'Understand time and space complexity',
+      category: 'learning'
+    },
+  ];
+
+  // Code-specific actions (only show if user has code)
+  const codeActions = hasCode ? [
+    { 
+      action: 'review_code', 
+      label: 'Review My Code', 
+      icon: '🔍', 
+      description: 'Get feedback on your current implementation',
+      category: 'code_review'
     },
     { 
-      action: 'solution', 
-      label: 'Show Full Solution', 
-      icon: '✨', 
-      description: 'Reveal the complete solution (requires confirmation)',
-      variant: 'warning'
+      action: 'test_solution', 
+      label: 'Test My Solution', 
+      icon: '✅', 
+      description: 'Validate if your approach is correct',
+      category: 'code_review'
     },
+    { 
+      action: 'optimize', 
+      label: 'Optimization Tips', 
+      icon: '⚡', 
+      description: 'Get suggestions to improve your solution',
+      category: 'code_review'
+    },
+  ] : [];
+
+  // Learning actions
+  const learningActions = [
+    { 
+      action: 'explain_concept', 
+      label: 'Explain Concept', 
+      icon: '📚', 
+      description: 'Deep dive into underlying concepts',
+      category: 'learning'
+    },
+    { 
+      action: 'similar_problems', 
+      label: 'Similar Problems', 
+      icon: '🔗', 
+      description: 'Find related problems to practice',
+      category: 'learning'
+    },
+  ];
+
+  // Solution action (always available, but requires confirmation)
+  const solutionAction = { 
+    action: 'solution', 
+    label: 'Show Full Solution', 
+    icon: '✨', 
+    description: 'Reveal the complete solution (requires confirmation)',
+    variant: 'warning',
+    category: 'solution'
+  };
+
+  // Combine actions based on context
+  const actionButtons = [
+    ...baseActions,
+    ...codeActions,
+    ...learningActions,
+    solutionAction,
   ];
 
   // Auto-scroll to bottom when chat history changes
@@ -326,6 +385,21 @@ function TutorPanel({
       case 'complexity':
         message = 'Can you explain the time and space complexity of the optimal solution?';
         break;
+      case 'review_code':
+        message = 'Can you review my code and provide feedback?';
+        break;
+      case 'test_solution':
+        message = 'Can you help me test if my solution approach is correct?';
+        break;
+      case 'optimize':
+        message = 'Can you suggest optimizations for my current solution?';
+        break;
+      case 'explain_concept':
+        message = 'Can you explain the underlying concepts and data structures needed for this problem?';
+        break;
+      case 'similar_problems':
+        message = 'Can you suggest similar problems I should practice?';
+        break;
       case 'solution':
         // Show confirmation dialog
         setShowSolutionConfirm(true);
@@ -447,30 +521,105 @@ function TutorPanel({
         </Tabs>
       </div>
 
-      {/* Action Buttons - Compact */}
+      {/* Action Buttons - Contextual and Organized */}
       <div className="px-3 py-2 border-b border-border-subtle bg-black-elevated flex-shrink-0">
         <h3 className="text-xs font-semibold text-text-primary mb-2">
           Quick Actions
         </h3>
-        <div className="grid grid-cols-2 gap-1.5">
-          {actionButtons.map((btn) => (
-            <button
-              key={btn.action}
-              onClick={() => handleActionButton(btn.action)}
-              disabled={isLoading}
-              className={`px-2 py-1.5 rounded-md text-left transition-all text-xs ${
-                btn.variant === 'warning'
-                  ? 'bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30'
-                  : 'bg-black-base border border-border-subtle hover:border-accent-primary text-text-primary'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={btn.description}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm">{btn.icon}</span>
-                <span className="font-medium text-xs leading-tight">{btn.label}</span>
+        {/* Group actions by category for better organization */}
+        <div className="space-y-2">
+          {/* Primary actions (always visible) */}
+          <div className="grid grid-cols-2 gap-1.5">
+            {actionButtons
+              .filter(btn => btn.category === 'hints' || btn.category === 'learning')
+              .slice(0, 4)
+              .map((btn) => (
+                <button
+                  key={btn.action}
+                  onClick={() => handleActionButton(btn.action)}
+                  disabled={isLoading}
+                  className={`px-2 py-1.5 rounded-md text-left transition-all text-xs ${
+                    'bg-black-base border border-border-subtle hover:border-accent-primary text-text-primary'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title={btn.description}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{btn.icon}</span>
+                    <span className="font-medium text-xs leading-tight">{btn.label}</span>
+                  </div>
+                </button>
+              ))}
+          </div>
+          
+          {/* Code review actions (only if user has code) */}
+          {hasCode && (
+            <div>
+              <div className="text-xs text-text-tertiary mb-1 px-1">Code Review</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {actionButtons
+                  .filter(btn => btn.category === 'code_review')
+                  .map((btn) => (
+                    <button
+                      key={btn.action}
+                      onClick={() => handleActionButton(btn.action)}
+                      disabled={isLoading}
+                      className="px-2 py-1.5 rounded-md text-left transition-all text-xs bg-blue-500/10 border border-blue-500/20 hover:border-blue-500/40 text-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={btn.description}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{btn.icon}</span>
+                        <span className="font-medium text-xs leading-tight">{btn.label}</span>
+                      </div>
+                    </button>
+                  ))}
               </div>
-            </button>
-          ))}
+            </div>
+          )}
+          
+          {/* Additional learning actions */}
+          {actionButtons.filter(btn => btn.category === 'learning' && !['approach', 'edge_cases', 'complexity'].includes(btn.action)).length > 0 && (
+            <div>
+              <div className="text-xs text-text-tertiary mb-1 px-1">More Help</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {actionButtons
+                  .filter(btn => btn.category === 'learning' && !['approach', 'edge_cases', 'complexity'].includes(btn.action))
+                  .map((btn) => (
+                    <button
+                      key={btn.action}
+                      onClick={() => handleActionButton(btn.action)}
+                      disabled={isLoading}
+                      className="px-2 py-1.5 rounded-md text-left transition-all text-xs bg-black-base border border-border-subtle hover:border-accent-primary text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={btn.description}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{btn.icon}</span>
+                        <span className="font-medium text-xs leading-tight">{btn.label}</span>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Solution action (always last, prominent) */}
+          <div>
+            {actionButtons
+              .filter(btn => btn.category === 'solution')
+              .map((btn) => (
+                <button
+                  key={btn.action}
+                  onClick={() => handleActionButton(btn.action)}
+                  disabled={isLoading}
+                  className="w-full px-2 py-1.5 rounded-md text-left transition-all text-xs bg-orange-500/20 border border-orange-500/30 text-orange-400 hover:bg-orange-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={btn.description}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{btn.icon}</span>
+                    <span className="font-medium text-xs leading-tight">{btn.label}</span>
+                  </div>
+                </button>
+              ))}
+          </div>
         </div>
       </div>
 

@@ -600,8 +600,8 @@ class TutorService:
             code_hash=code_hash
         )
         
-        # Update session hints count
-        await self._update_session_hints(session_id)
+        # Note: Do NOT increment hints_used here - chat messages are not hints
+        # Only actual hint unlocks (via unlock_hint) should increment hints_used
         
         # Get updated rate info
         rate_budget = await self.rate_limit_service.get_rate_budget(

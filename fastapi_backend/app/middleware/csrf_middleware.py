@@ -29,6 +29,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/users.json",
         "/users/sign_in",
         "/users/sign_in.json",
+        "/users/sign_out",
+        "/users/sign_out.json",
         "/auth/refresh",  # Refresh endpoint uses refresh token cookie, not CSRF
         "/docs",
         "/openapi.json",

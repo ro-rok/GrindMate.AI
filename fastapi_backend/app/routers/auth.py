@@ -275,12 +275,40 @@ async def refresh_token(
     # Generate new CSRF token
     new_csrf_token = create_refresh_token()
     
+    # Get user data to return
+    from bson import ObjectId
+    user_doc = await db["users"].find_one({"_id": ObjectId(user_id)})
+    if not user_doc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    user_public = UserPublic(
+        id=user_doc["_id"],
+        email=user_doc["email"],
+        legacy_id=user_doc.get("legacy_id"),
+        security_question_id=user_doc.get("security_question_id"),
+        role=user_doc.get("role", "user"),
+        current_streak=user_doc.get("current_streak", 0),
+        longest_streak=user_doc.get("longest_streak", 0),
+        last_solve_date=user_doc.get("last_solve_date"),
+        timezone=user_doc.get("timezone", "UTC"),
+        rate_budget_tokens=user_doc.get("rate_budget_tokens", 25000),
+        rate_budget_requests=user_doc.get("rate_budget_requests", 30),
+        rate_budget_reset_at=user_doc.get("rate_budget_reset_at"),
+        tutor_mode=user_doc.get("tutor_mode", "socratic"),
+        is_premium=user_doc.get("is_premium", False),
+        preferences=user_doc.get("preferences", {}) if isinstance(user_doc.get("preferences"), dict) else UserPreferences(),
+    )
+    
     # Set new cookies
     set_auth_cookies(response, new_access_token, new_refresh_token, new_csrf_token, request=request)
     
     return {
         "message": "Token refreshed successfully",
-        "csrf_token": new_csrf_token
+        "csrf_token": new_csrf_token,
+        "user": user_public.model_dump()
     }
 
 
@@ -303,10 +331,33 @@ async def logout_user(
     if refresh_token_str:
         await revoke_refresh_token(db, refresh_token_str)
     
-    # Clear all auth cookies
-    response.delete_cookie(key=settings.access_token_cookie_name)
-    response.delete_cookie(key=settings.refresh_token_cookie_name)
-    response.delete_cookie(key=settings.csrf_token_cookie_name)
+    # Determine cookie security settings (must match settings used when setting cookies)
+    backend_is_https = request.url.scheme == "https"
+    cookie_secure = backend_is_https
+    cookie_samesite = "none" if backend_is_https else "lax"
+    
+    # Clear all auth cookies with same settings used when setting them
+    response.delete_cookie(
+        key=settings.access_token_cookie_name,
+        httponly=True,
+        secure=cookie_secure,
+        samesite=cookie_samesite,
+        path="/"
+    )
+    response.delete_cookie(
+        key=settings.refresh_token_cookie_name,
+        httponly=True,
+        secure=cookie_secure,
+        samesite=cookie_samesite,
+        path="/"
+    )
+    response.delete_cookie(
+        key=settings.csrf_token_cookie_name,
+        httponly=False,
+        secure=cookie_secure,
+        samesite=cookie_samesite,
+        path="/"
+    )
     
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

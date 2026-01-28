@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Input from '../components/ui/Input';
 import ConfirmationModal from '../components/ui/ConfirmationModal';
+import Modal from '../components/ui/Modal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import TutorSessionHistory from '../components/tutor/TutorSessionHistory';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -55,6 +56,12 @@ function Profile() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  
+  // Reset progress state
+  const [resetScope, setResetScope] = useState('all'); // 'all' or 'company'
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [companies, setCompanies] = useState([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
 
   useEffect(() => {
     fetchProfileData();
@@ -193,14 +200,51 @@ function Profile() {
     }
   };
 
+  const fetchCompanies = async () => {
+    try {
+      setLoadingCompanies(true);
+      const response = await api.get('/companies');
+      setCompanies(response.data || []);
+    } catch (error) {
+      console.error('Failed to fetch companies:', error);
+      toast.error('Failed to load companies');
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  const handleOpenResetModal = () => {
+    setResetScope('all');
+    setSelectedCompanyId('');
+    if (companies.length === 0) {
+      fetchCompanies();
+    }
+    setShowResetModal(true);
+  };
+
   const handleResetProgress = async () => {
     try {
       setResetting(true);
       
-      await api.post('/users/reset_progress');
+      const payload = {
+        user_id: user?.id,
+      };
       
-      toast.success('Progress reset successfully');
+      // Add company_id if resetting specific company
+      if (resetScope === 'company' && selectedCompanyId) {
+        payload.company_id = selectedCompanyId;
+      }
+      
+      await api.post('/users/reset_progress', payload);
+      
+      toast.success(
+        resetScope === 'all' 
+          ? 'All progress reset successfully' 
+          : 'Company progress reset successfully'
+      );
       setShowResetModal(false);
+      setResetScope('all');
+      setSelectedCompanyId('');
       
       // Refresh data
       await fetchProfileData();
@@ -637,7 +681,7 @@ function Profile() {
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={() => setShowResetModal(true)}
+                  onClick={handleOpenResetModal}
                 >
                   Reset
                 </Button>
@@ -665,16 +709,143 @@ function Profile() {
       </div>
 
       {/* Reset Progress Modal */}
-      <ConfirmationModal
-        isOpen={showResetModal}
-        onClose={() => setShowResetModal(false)}
-        onConfirm={handleResetProgress}
-        title="Reset Progress"
-        message="Are you sure you want to reset all your progress? This will clear all solved questions and reset your streak. This action cannot be undone."
-        confirmText="Reset Progress"
-        confirmVariant="danger"
-        loading={resetting}
-      />
+      {showResetModal && (
+        <Modal
+          isOpen={showResetModal}
+          onClose={() => {
+            if (!resetting) {
+              setShowResetModal(false);
+              setResetScope('all');
+              setSelectedCompanyId('');
+            }
+          }}
+          title="Reset Progress"
+          size="md"
+          closeOnOverlayClick={!resetting}
+        >
+          <div>
+            {/* Warning Icon */}
+            <div className="mb-4 flex justify-center">
+              <div 
+                className="w-16 h-16 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+              >
+                <svg
+                  className="w-8 h-8"
+                  style={{ color: 'var(--accent-danger)' }}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            {/* Reset Scope Selection */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-3">
+                What would you like to reset?
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-center p-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--bg-surface)] transition-colors">
+                  <input
+                    type="radio"
+                    name="resetScope"
+                    value="all"
+                    checked={resetScope === 'all'}
+                    onChange={(e) => setResetScope(e.target.value)}
+                    className="mr-3"
+                    disabled={resetting}
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-[var(--text-primary)]">
+                      All Progress
+                    </div>
+                    <div className="text-xs text-[var(--text-secondary)]">
+                      Clear all solved questions across all companies and reset your streak
+                    </div>
+                  </div>
+                </label>
+                <label className="flex items-center p-3 rounded-[var(--radius-md)] border border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--bg-surface)] transition-colors">
+                  <input
+                    type="radio"
+                    name="resetScope"
+                    value="company"
+                    checked={resetScope === 'company'}
+                    onChange={(e) => setResetScope(e.target.value)}
+                    className="mr-3"
+                    disabled={resetting}
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-[var(--text-primary)] mb-1">
+                      Specific Company
+                    </div>
+                    <div className="text-xs text-[var(--text-secondary)] mb-2">
+                      Clear solved questions for a specific company only
+                    </div>
+                    {resetScope === 'company' && (
+                      <select
+                        value={selectedCompanyId}
+                        onChange={(e) => setSelectedCompanyId(e.target.value)}
+                        className="w-full px-3 py-2 text-sm bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-sm)] text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"
+                        disabled={resetting || loadingCompanies}
+                      >
+                        <option value="">Select a company...</option>
+                        {companies.map((company) => (
+                          <option key={company.id || company._id} value={company.id || company._id}>
+                            {company.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Warning Message */}
+            <div className="mb-6 p-3 bg-[var(--bg-surface-2)] border border-[var(--border-danger)]/30 rounded-[var(--radius-md)]">
+              <p className="text-sm text-[var(--text-secondary)]">
+                <strong className="text-[var(--accent-danger)]">Warning:</strong> This action cannot be undone. 
+                {resetScope === 'all' 
+                  ? ' All your solved questions and streak will be permanently deleted.'
+                  : selectedCompanyId 
+                  ? ` All solved questions for the selected company will be permanently deleted.`
+                  : ' Please select a company first.'}
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowResetModal(false);
+                  setResetScope('all');
+                  setSelectedCompanyId('');
+                }}
+                disabled={resetting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleResetProgress}
+                loading={resetting}
+                disabled={resetting || (resetScope === 'company' && !selectedCompanyId)}
+              >
+                Reset Progress
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Delete Account Modal */}
       <ConfirmationModal
