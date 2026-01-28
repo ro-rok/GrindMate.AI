@@ -48,6 +48,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.EXEMPT_PATHS:
             return await call_next(request)
         
+        # Skip CSRF check for admin endpoints (already protected by authentication)
+        if request.url.path.startswith("/api/admin"):
+            return await call_next(request)
+        
         # Get CSRF token from header
         csrf_header = request.headers.get("X-CSRF-Token")
         
