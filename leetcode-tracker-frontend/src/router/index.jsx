@@ -150,13 +150,15 @@ const router = createBrowserRouter([
       },
     ],
   },
-  // Catch-all 404 page
+  // Catch-all 404 page - must be at root level to catch all unmatched routes
   {
     path: '*',
     element: (
-      <SuspenseLayout>
-        <NotFound />
-      </SuspenseLayout>
+      <SimpleLayout>
+        <SuspenseLayout>
+          <NotFound />
+        </SuspenseLayout>
+      </SimpleLayout>
     ),
   },
 ]);
