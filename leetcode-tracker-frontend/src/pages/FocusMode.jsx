@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import toast from '../utils/toast';
 import useUIStore from '../store/uiStore';
 import useAuthStore from '../store/authStore';
@@ -23,8 +23,12 @@ import api from '../api';
 function FocusMode() {
   const { questionId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const { openFocusMode, closeFocusMode } = useUIStore();
+  
+  // Get return path from location state, default to companies list
+  const returnPath = location.state?.returnTo || '/companies';
 
   // Use the question timer hook
   const { 
@@ -339,7 +343,7 @@ function FocusMode() {
     if (question?.solved || sessionState === 'solved' || sessionState === 'review') {
       persistSession();
       stopTimer();
-      navigate(-1);
+      navigate(returnPath);
       return;
     }
     
@@ -356,7 +360,7 @@ function FocusMode() {
     
     persistSession();
     stopTimer();
-    navigate(-1);
+    navigate(returnPath);
   };
 
   const handleCompletionSolved = () => {
@@ -427,7 +431,7 @@ function FocusMode() {
         } else {
           // Don't show completion sheet if already solved - just close
           persistSession();
-          navigate(-1);
+          navigate(returnPath);
         }
       }
     } catch (err) {
@@ -487,7 +491,7 @@ function FocusMode() {
   const handleFeedbackModalClose = () => {
     setShowFeedbackModal(false);
     // Navigate away after feedback modal closes
-    setTimeout(() => navigate(-1), 500);
+    setTimeout(() => navigate(returnPath), 500);
   };
 
   // Show loading state
@@ -517,7 +521,7 @@ function FocusMode() {
           <div className="mt-4 text-center">
             <Button
               variant="secondary"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate(returnPath)}
             >
               Go Back
             </Button>

@@ -309,8 +309,10 @@ function QuestionList() {
       window.open(leetcodeUrl, '_blank');
     }
     
-    // Navigate to Focus Mode
-    navigate(`/focus/${getQuestionIdentifier(question)}`);
+    // Navigate to Focus Mode with companyId in state for return navigation
+    navigate(`/focus/${getQuestionIdentifier(question)}`, {
+      state: { returnTo: `/companies/${companyId}` }
+    });
   };
 
   // Handle action from modal
@@ -324,7 +326,9 @@ function QuestionList() {
       
       case 'stuck':
         // Navigate to focus mode with AI tutor
-        navigate(`/focus/${getQuestionIdentifier(actionModalQuestion)}`);
+        navigate(`/focus/${getQuestionIdentifier(actionModalQuestion)}`, {
+          state: { returnTo: `/companies/${companyId}` }
+        });
         break;
       
       case 'unsolve':
@@ -720,11 +724,15 @@ function QuestionList() {
                     if (question.leetcode_url) {
                       window.open(question.leetcode_url, '_blank');
                     }
-                    // Navigate to Focus Mode
-                    navigate(`/focus/${getQuestionIdentifier(question)}`);
+                    // Navigate to Focus Mode with companyId in state for return navigation
+                    navigate(`/focus/${getQuestionIdentifier(question)}`, {
+                      state: { returnTo: `/companies/${companyId}` }
+                    });
                   }}
                   onAskAI={(question) => {
-                    navigate(`/focus/${getQuestionIdentifier(question)}`);
+                    navigate(`/focus/${getQuestionIdentifier(question)}`, {
+                      state: { returnTo: `/companies/${companyId}` }
+                    });
                     // Focus mode will open AI tutor tab
                   }}
                   onMarkSolved={(question, solved) => handleMarkSolved(question.id, solved)}
