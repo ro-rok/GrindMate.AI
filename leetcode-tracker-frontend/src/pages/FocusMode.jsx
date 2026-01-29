@@ -9,7 +9,6 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import ErrorPanel from '../components/ui/ErrorPanel';
 import TutorPanel from '../components/tutor/TutorPanel';
-import TutorFeedbackModal, { isSessionDismissed } from '../components/tutor/TutorFeedbackModal';
 import CompletionBottomSheet from '../components/focus/CompletionBottomSheet';
 import { SmartRandomButton } from '../components/question';
 import { getQuestionIdentifier } from '../utils/slugify';
@@ -21,7 +20,7 @@ import api from '../api';
  * Enhanced with sticky header, timer, keyboard shortcuts, and session state management
  */
 function FocusMode() {
-  const { questionId } = useParams();
+  const { companyId: companyIdFromUrl, questionId: questionIdFromUrl } = useParams(); // Slugs from URL (company-slug/question-slug format)
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
@@ -29,18 +28,29 @@ function FocusMode() {
   
   // Get return path from location state, default to companies list
   const returnPath = location.state?.returnTo || '/companies';
+  
+  // CRITICAL: Prefer questionId (ObjectId) from location.state over slug from URL
+  // This ensures we use the exact question ID from QuestionList, not just slug matching
+  // Slug matching can return the wrong question if multiple questions have similar slugs
+  const questionIdFromState = location.state?.questionId; // ObjectId from QuestionList
+  const questionId = questionIdFromState || questionIdFromUrl; // Use ObjectId if available, fallback to slug
+  
+  // Get company ID from state or URL
+  const companyId = location.state?.companyId || companyIdFromUrl;
+
+  const [question, setQuestion] = useState(null);
 
   // Use the question timer hook
+  // Pass question?.solved to prevent auto-starting timer if question is already solved
   const { 
     elapsedTime, 
     isRunning, 
     formattedTime, 
     startTimer, 
     stopTimer, 
+    resetTimer,
     saveTime 
-  } = useQuestionTimer(questionId, user?.id);
-
-  const [question, setQuestion] = useState(null);
+  } = useQuestionTimer(questionId, user?.id, question?.solved);
   const [questionContent, setQuestionContent] = useState(null);
   const [loadingContent, setLoadingContent] = useState(false);
   const [questionError, setQuestionError] = useState(null);
@@ -54,7 +64,6 @@ function FocusMode() {
   const [editorScrollTop, setEditorScrollTop] = useState(0);
   const [hintsUsed, setHintsUsed] = useState(0);
   const [selectedLanguage, setSelectedLanguage] = useState('python');
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [usedTutor, setUsedTutor] = useState(false);
   const [showCompletionSheet, setShowCompletionSheet] = useState(false);
   const [tutorPanelCollapsed, setTutorPanelCollapsed] = useState(false);
@@ -70,31 +79,81 @@ function FocusMode() {
 
   // Track initialized questionIds to prevent double initialization
   const initializedQuestionsRef = useRef(new Set());
+  const lastQuestionIdRef = useRef(null);
+  const lastLocationKeyRef = useRef(null);
+  const refreshTimeoutRef = useRef(null);
+  const fetchingQuestionRef = useRef(false);
+  const fetchedQuestionsRef = useRef(new Set());
+  const visibilityDebounceTimeoutRef = useRef(null);
+  const markingSolvedRef = useRef(false); // Idempotency guard for mark solved
+  const markingUnsolvedRef = useRef(false); // Idempotency guard for mark unsolved
   
   // Initialize session and start timer
   useEffect(() => {
-    // Prevent double initialization in React StrictMode - use Set to track by questionId
-    if (!questionId || initializedQuestionsRef.current.has(questionId)) return;
-    initializedQuestionsRef.current.add(questionId);
+    // If questionId changed, reset initialization tracking
+    if (lastQuestionIdRef.current !== questionId) {
+      initializedQuestionsRef.current.clear();
+      fetchQuestionContentRef.current.clear();
+      fetchedQuestionsRef.current.clear(); // Clear fetched questions when questionId changes
+      fetchingQuestionRef.current = false; // Reset fetching flag
+      lastQuestionIdRef.current = questionId;
+    }
     
-    // Reset fetch content ref when questionId changes (for new questions)
-    fetchQuestionContentRef.current.clear();
+    // Check if this is a navigation to Focus Mode (location key changes)
+    const isNavigation = location.key !== lastLocationKeyRef.current;
+    const wasDifferentLocation = lastLocationKeyRef.current !== null;
+    lastLocationKeyRef.current = location.key;
+    
+    // Prevent double initialization in React StrictMode - use Set to track by questionId
+    // But allow refresh if we're returning to the same question (component remounts or navigation)
+    const isNewQuestion = !initializedQuestionsRef.current.has(questionId);
+    
+    if (!questionId) return;
+    
+    // If navigating to Focus Mode (even same question), refresh the question data
+    // This ensures we get the latest solve status if it was changed outside Focus Mode
+    if (isNavigation && wasDifferentLocation && !isNewQuestion) {
+      // Clear the question from initialized set to force refresh
+      initializedQuestionsRef.current.delete(questionId);
+    }
+    
+    if (isNewQuestion || (isNavigation && wasDifferentLocation)) {
+      initializedQuestionsRef.current.add(questionId);
+    }
 
     openFocusMode(questionId);
-    fetchQuestion();
-    initializeSession();
+    
+    // Always fetch question to get latest status (especially important when returning to Focus Mode)
+    // Clear any pending refresh timeout
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    
+    // Small delay to prevent rapid successive calls
+    refreshTimeoutRef.current = setTimeout(() => {
+      // Force refresh if navigating to same question (to get latest status)
+      const shouldForceRefresh = isNavigation && wasDifferentLocation && !isNewQuestion;
+      fetchQuestion(shouldForceRefresh);
+      if (isNewQuestion || (isNavigation && wasDifferentLocation)) {
+        initializeSession();
+      }
+    }, 100);
 
     // Timer will auto-start via useQuestionTimer hook when question loads
-    // No need to call startTimer() here as it's handled by the hook
+    // But we'll pause it if question is solved (handled in fetchQuestion)
 
     return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
       // Only remove from Set when component unmounts (not on re-render)
       initializedQuestionsRef.current.delete(questionId);
       closeFocusMode();
       persistSession();
       // Timer continues running even after unmount
     };
-  }, [questionId]);
+  }, [questionId, location.key]);
+
 
   // Auto-load code template when question content is fetched
   useEffect(() => {
@@ -183,7 +242,6 @@ function FocusMode() {
       setSessionId(response.data.session_id);
       setSessionState('not_started');
     } catch (err) {
-      console.error('Failed to initialize session:', err);
       // Continue without session tracking
     }
   };
@@ -199,7 +257,7 @@ function FocusMode() {
         hints_used: hintsUsed,
       });
     } catch (err) {
-      console.error('Failed to persist session:', err);
+      // Failed to persist session
     }
   };
 
@@ -216,7 +274,7 @@ function FocusMode() {
         hints_used: hintsUsed,
       });
     } catch (err) {
-      console.error('Failed to update session state:', err);
+      // Failed to update session state
     }
   };
 
@@ -243,7 +301,7 @@ function FocusMode() {
     }, 50);
   };
 
-  const fetchQuestion = async () => {
+  const fetchQuestion = async (forceRefresh = false) => {
     // Validate questionId exists
     if (!questionId || questionId.trim() === '') {
       setQuestionError({
@@ -254,27 +312,75 @@ function FocusMode() {
       return;
     }
 
-    setIsLoadingQuestion(true);
+    // Don't show loading spinner if this is a background refresh
+    if (!forceRefresh) {
+      setIsLoadingQuestion(true);
+    }
     setQuestionError(null);
 
     try {
+      // CRITICAL: Use questionId which prefers ObjectId from state over slug from URL
+      // This ensures we fetch the exact question that was selected in QuestionList
+      // If questionIdFromState exists, it's the ObjectId; otherwise it's the slug from URL
       const response = await api.get(`/questions/${questionId}`, {
-        params: { user_id: user?.id }
+        params: { 
+          user_id: user?.id,
+          _t: Date.now() // Cache busting parameter
+        }
       });
       
+      // Verify the fetched question matches the expected ID if we have it from state
+      if (questionIdFromState && response.data.id !== questionIdFromState) {
+        console.warn('[FocusMode] Question ID mismatch:', {
+          expected: questionIdFromState,
+          received: response.data.id,
+          urlSlug: questionIdFromUrl
+        });
+        // Still use the fetched question, but log the warning
+      }
+      
+      const previousSolved = question?.solved;
+      const newSolved = response.data.solved;
+      
+      // Update question state with fresh backend data (single source of truth)
       setQuestion(response.data);
       setQuestionError(null);
       
-      // Check if question is already solved
-      if (response.data.solved) {
-        setSessionState('review');
+      // Validate and sync session state with backend solved status
+      // Always trust backend response - no optimistic updates
+      // Backend is single source of truth for solved status
+      if (response.data.solved === true) {
+        // Backend confirms question is solved - validate and sync state
+        if (sessionState !== 'review' && sessionState !== 'solved') {
+          setSessionState('review');
+        }
+        
+        // Auto-pause timer when question is solved
+        if (isRunning) {
+          stopTimer();
+        }
+      } else {
+        // Backend confirms question is NOT solved - validate and sync state
+        // Reset session state if it was previously marked as solved/review
+        if (sessionState === 'review' || sessionState === 'solved') {
+          setSessionState('not_started');
+        }
+        
+        // Validation: Reset if there was a mismatch
+        if (previousSolved === true && newSolved === false) {
+          setSessionState('not_started');
+        }
       }
       
-      // Fetch question content from LeetCode via backend proxy
-      fetchQuestionContent();
+      // Fetch question content from LeetCode via backend proxy (only if not already loaded)
+      if (!questionContent || forceRefresh) {
+        // Clear the content ref to allow re-fetching
+        if (forceRefresh) {
+          fetchQuestionContentRef.current.delete(questionId);
+        }
+        fetchQuestionContent();
+      }
     } catch (err) {
-      console.error('Failed to fetch question:', err);
-      
       // Determine error type and message
       let errorTitle = 'Failed to Load Question';
       let errorMessage = 'Unable to load the question. Please try again.';
@@ -304,10 +410,83 @@ function FocusMode() {
       if (err.response?.status !== 404) {
         toast.error(errorMessage);
       }
+      
+      // On error, remove from fetched set so it can retry
+      fetchedQuestionsRef.current.delete(questionKey);
     } finally {
       setIsLoadingQuestion(false);
+      fetchingQuestionRef.current = false;
     }
   };
+
+  // Refresh question data when page becomes visible (e.g., returning from another tab/page)
+  // This ensures we get the latest solve status if it was changed outside Focus Mode
+  // CRITICAL: Always fetch fresh solved status from backend - single source of truth
+  useEffect(() => {
+    if (!questionId) return;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && questionId) {
+        // Debounce rapid visibility changes
+        if (visibilityDebounceTimeoutRef.current) {
+          clearTimeout(visibilityDebounceTimeoutRef.current);
+        }
+        visibilityDebounceTimeoutRef.current = setTimeout(() => {
+          // Only fetch if not already fetching
+          if (!fetchingQuestionRef.current) {
+            fetchQuestion(true); // Force refresh to get latest solved status
+          }
+        }, 300);
+      }
+    };
+
+    const handleFocus = () => {
+      if (questionId) {
+        // Debounce rapid focus events
+        if (visibilityDebounceTimeoutRef.current) {
+          clearTimeout(visibilityDebounceTimeoutRef.current);
+        }
+        visibilityDebounceTimeoutRef.current = setTimeout(() => {
+          // Only fetch if not already fetching
+          if (!fetchingQuestionRef.current) {
+            fetchQuestion(true); // Force refresh to get latest solved status
+          }
+        }, 300);
+      }
+    };
+
+    // Also listen for storage events (if question status is updated via localStorage)
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.includes('question') && questionId) {
+        // Debounce storage events
+        if (visibilityDebounceTimeoutRef.current) {
+          clearTimeout(visibilityDebounceTimeoutRef.current);
+        }
+        visibilityDebounceTimeoutRef.current = setTimeout(() => {
+          // Only fetch if not already fetching
+          if (!fetchingQuestionRef.current) {
+            fetchQuestion(true); // Force refresh to get latest solved status
+          }
+        }, 300);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      if (visibilityDebounceTimeoutRef.current) {
+        clearTimeout(visibilityDebounceTimeoutRef.current);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [questionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchQuestionContentRef = useRef(new Set());
   const fetchQuestionContent = async () => {
@@ -324,17 +503,8 @@ function FocusMode() {
       if (response.data) {
         setQuestionContent(response.data);
         
-        // Show cache status in console for debugging (only once per question)
-        if (response.data.cached) {
-          console.log('✅ Loaded cached LeetCode content');
-        } else {
-          console.log('🌐 Fetched fresh LeetCode content (now cached)');
-        }
-      } else {
-        console.warn('Question content not found in response');
       }
     } catch (err) {
-      console.error('Failed to fetch question content:', err);
       // Don't show error toast - content is optional
       // The UI will show "Question description not available" message
       // Remove from Set on error so it can retry
@@ -359,12 +529,6 @@ function FocusMode() {
   };
 
   const handleCompletionClose = () => {
-    // Trigger feedback modal if user used tutor and session not dismissed
-    if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
-      setShowFeedbackModal(true);
-      return;
-    }
-    
     persistSession();
     stopTimer();
     navigate(returnPath);
@@ -394,10 +558,42 @@ function FocusMode() {
 
   const handleTokensUpdate = (tokensRemaining) => {
     // Could update UI or store if needed
-    console.log('Tokens remaining:', tokensRemaining);
   };
 
   const handleMarkSolved = async () => {
+    // Idempotency guard: prevent duplicate calls
+    if (markingSolvedRef.current) return;
+    
+    // Also check if question is already solved
+    if (question?.solved) {
+      return; // Already solved, no need to call API again
+    }
+    
+    // Validate user is authenticated
+    if (!user?.id) {
+      toast.error('User not authenticated');
+      return;
+    }
+    
+    // CRITICAL: Use question.id (database ObjectId) instead of questionId (slug)
+    // This ensures consistency with QuestionList which uses question.id
+    // The backend can handle both formats, but using ObjectId is more reliable
+    // Prefer question.id (ObjectId) over questionId (slug) for API calls
+    const questionIdentifier = question?.id || questionId;
+    
+    // Validation: Ensure we have a valid question identifier before making API call
+    if (!questionIdentifier) {
+      toast.error('Question identifier not available. Please refresh the page.');
+      console.error('[FocusMode] Cannot mark as solved: missing question identifier', { 
+        questionId, 
+        questionDbId: question?.id,
+        question: question 
+      });
+      return;
+    }
+    
+    markingSolvedRef.current = true;
+    
     try {
       // Stop timer
       stopTimer();
@@ -406,17 +602,34 @@ function FocusMode() {
       await saveTime();
       
       // Mark as solved with time spent
-      const response = await api.post(`/questions/${questionId}/solve.json?user_id=${user.id}`, {
+      // Debug: Log the solve request
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[FocusMode] Marking question as solved:', { 
+          questionId: questionIdentifier, 
+          questionSlug: questionId,
+          questionDbId: question?.id,
+          usingObjectId: !!question?.id,
+          userId: user.id, 
+          elapsedTime 
+        });
+      }
+      const response = await api.post(`/questions/${questionIdentifier}/solve.json?user_id=${user.id}`, {
         time_spent_seconds: elapsedTime
       });
+      
+      // Debug: Log the response
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[FocusMode] Solve response:', response.data);
+      }
       
       // Check if the API call was successful
       if (response.status === 200 || response.status === 201) {
         toast.success('Marked as solved! 🎉');
         updateSessionState('solved');
         
-        // Update question solved status locally immediately
-        setQuestion(prev => prev ? { ...prev, solved: true } : null);
+        // CRITICAL: Always fetch fresh solved status from backend after marking as solved
+        // Don't use optimistic updates - backend is single source of truth
+        await fetchQuestion(true); // Force refresh to get latest solved status
         
         // End session with final time
         if (sessionId) {
@@ -427,26 +640,99 @@ function FocusMode() {
               total_time: elapsedTime,
             });
           } catch (sessionErr) {
-            console.error('Failed to end session:', sessionErr);
             // Don't block navigation if session end fails
           }
         }
         
-        // Show completion sheet or feedback modal
-        if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
-          setShowFeedbackModal(true);
-        } else {
-          // Don't show completion sheet if already solved - just close
-          persistSession();
-          // Small delay to ensure backend has processed the solve status
-          setTimeout(() => {
-            navigate(returnPath);
-          }, 100);
+        // Don't show completion sheet if already solved - just close
+        persistSession();
+        // Navigate back immediately - backend should have committed the solve status
+        navigate(returnPath, { 
+          state: { 
+            questionSolved: true,
+            questionId: question?.id || questionId, // Use question.id (DB ID) if available, fallback to slug
+            questionSlug: questionId // Also pass slug for matching
+          } 
+        });
+      }
+    } catch (err) {
+      toast.error('Failed to mark as solved. Please try again.');
+      // On error, refresh question data to ensure we have correct state
+      await fetchQuestion(true);
+    } finally {
+      markingSolvedRef.current = false;
+    }
+  };
+
+  const handleMarkUnsolved = async () => {
+    // Idempotency guard: prevent duplicate calls
+    if (markingUnsolvedRef.current) return;
+    
+    // Also check if question is already unsolved
+    if (!question?.solved) {
+      return; // Already unsolved, no need to call API again
+    }
+    
+    // Validate user is authenticated
+    if (!user?.id) {
+      toast.error('User not authenticated');
+      return;
+    }
+    
+    // CRITICAL: Use question.id (database ObjectId) instead of questionId (slug)
+    // This ensures consistency with QuestionList which uses question.id
+    // Prefer question.id (ObjectId) over questionId (slug) for API calls
+    const questionIdentifier = question?.id || questionId;
+    
+    // Validation: Ensure we have a valid question identifier before making API call
+    if (!questionIdentifier) {
+      toast.error('Question identifier not available. Please refresh the page.');
+      console.error('[FocusMode] Cannot mark as unsolved: missing question identifier', { 
+        questionId, 
+        questionDbId: question?.id,
+        question: question 
+      });
+      return;
+    }
+    
+    markingUnsolvedRef.current = true;
+    
+    try {
+      // Mark as unsolved
+      // Debug: Log the unsolve request
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[FocusMode] Marking question as unsolved:', { 
+          questionId: questionIdentifier, 
+          questionSlug: questionId,
+          questionDbId: question?.id,
+          usingObjectId: !!question?.id,
+          userId: user.id
+        });
+      }
+      const response = await api.delete(`/questions/${questionIdentifier}/solve.json?user_id=${user.id}`);
+      
+      // Check if the API call was successful
+      if (response.status === 200 || response.status === 204) {
+        toast.success('Marked as unsolved');
+        
+        // CRITICAL: Always fetch fresh solved status from backend after marking as unsolved
+        // Don't use optimistic updates - backend is single source of truth
+        await fetchQuestion(true); // Force refresh to get latest solved status
+        
+        // Reset session state since question is no longer solved
+        setSessionState('not_started');
+        
+        // Restart timer since question is now unsolved
+        if (!isRunning) {
+          startTimer();
         }
       }
     } catch (err) {
-      console.error('Failed to mark as solved:', err);
-      toast.error('Failed to mark as solved. Please try again.');
+      toast.error('Failed to mark as unsolved. Please try again.');
+      // On error, refresh question data to ensure we have correct state
+      await fetchQuestion(true);
+    } finally {
+      markingUnsolvedRef.current = false;
     }
   };
 
@@ -497,12 +783,6 @@ function FocusMode() {
     return state.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   };
 
-  // Handle feedback modal close (Subtask 12.4)
-  const handleFeedbackModalClose = () => {
-    setShowFeedbackModal(false);
-    // Navigate away after feedback modal closes
-    setTimeout(() => navigate(returnPath), 500);
-  };
 
   // Show loading state
   if (isLoadingQuestion && !question && !questionError) {
@@ -601,6 +881,20 @@ function FocusMode() {
               {isRunning && (
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-success)] animate-pulse" aria-label="Timer running" />
               )}
+              {!question?.solved && (
+                <button
+                  onClick={() => {
+                    if (confirm('Reset timer to 00:00? This cannot be undone.')) {
+                      resetTimer();
+                      toast.info('Timer reset');
+                    }
+                  }}
+                  className="ml-2 text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                  title="Reset timer"
+                >
+                  ↻
+                </button>
+              )}
             </div>
             
             {/* Shortcuts Hint */}
@@ -621,7 +915,18 @@ function FocusMode() {
               showToggle={false}
               onQuestionSelected={(question) => {
                 // Navigate to the new question in Focus Mode
-                navigate(`/focus/${getQuestionIdentifier(question)}`);
+                // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+                // Use company-slug/question-slug format in URL
+                const companySlug = question.company_slug || question.companySlug || companyId || 'all';
+                const questionSlug = getQuestionIdentifier(question);
+                navigate(`/companies/${companySlug}/focus/${questionSlug}`, {
+                  state: {
+                    questionId: question.id, // Pass exact ObjectId to ensure correct question is loaded
+                    questionSlug: questionSlug, // Also pass slug for reference
+                    companyId: question.company_id || question.companyId || companyId, // Pass company ID
+                    returnTo: returnPath // Preserve return path
+                  }
+                });
               }}
             />
             {sessionState === 'attempting' && (
@@ -643,9 +948,37 @@ function FocusMode() {
               </Button>
             )}
             {question.solved && (
-              <div className="px-[var(--space-4)] py-[var(--space-2)] bg-[var(--accent-success-light)] text-[var(--accent-success)] rounded-[var(--radius-md)] text-sm font-medium border border-[var(--border-success)]">
-                ✅ Solved
-              </div>
+              <>
+                <div className="px-[var(--space-4)] py-[var(--space-2)] bg-[var(--accent-success-light)] text-[var(--accent-success)] rounded-[var(--radius-md)] text-sm font-medium border border-[var(--border-success)]">
+                  ✅ Solved
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleMarkUnsolved}
+                  title="Mark as unsolved"
+                >
+                  ↩️ Unsolve
+                </Button>
+              </>
+            )}
+            {/* Debug: Show refresh button and status in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    fetchQuestion(true);
+                  }}
+                  title="Refresh question status"
+                >
+                  🔄
+                </Button>
+                <div className="text-xs text-[var(--text-tertiary)] px-2">
+                  Solved: {question?.solved ? 'Yes' : 'No'}
+                </div>
+              </>
             )}
             <button
               onClick={handleClose}
@@ -1007,13 +1340,6 @@ function FocusMode() {
         />
       )}
 
-      {/* Tutor Feedback Modal - Subtask 12.4 (Requirement 8.1) */}
-      <TutorFeedbackModal
-        isOpen={showFeedbackModal}
-        onClose={handleFeedbackModalClose}
-        sessionId={sessionId}
-        questionTitle={question?.title}
-      />
     </div>
   );
 }

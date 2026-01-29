@@ -34,3 +34,4 @@
 # Ignore master key for decrypting credentials and more.
 /config/master.key
 
+LINKEDIN_POSTS_GRINDMATE.md

@@ -304,32 +304,6 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
     logger.info("✓ Created compound index on tutor_sessions (user_id, created_at)")
     
     # ============================================================================
-    # TUTOR_FEEDBACK COLLECTION INDEXES
-    # ============================================================================
-    
-    # Unique index on session_id
-    # Requirement 11.2: Ensures one feedback per session
-    await db.tutor_feedback.create_index(
-        [("session_id", ASCENDING)],
-        name="idx_tutor_feedback_session_unique",
-        unique=True,
-        background=True
-    )
-    logger.info("✓ Created unique index on tutor_feedback (session_id)")
-    
-    # Compound index for user feedback history
-    # Requirement 11.2: Optimizes fetching feedback by user
-    await db.tutor_feedback.create_index(
-        [
-            ("user_id", ASCENDING),
-            ("created_at", DESCENDING)
-        ],
-        name="idx_tutor_feedback_user_created",
-        background=True
-    )
-    logger.info("✓ Created compound index on tutor_feedback (user_id, created_at)")
-    
-    # ============================================================================
     # SESSION_STATES COLLECTION INDEXES
     # ============================================================================
     
@@ -425,7 +399,6 @@ async def list_indexes(db: AsyncIOMotorDatabase) -> dict:
         "rate_limits",
         "refresh_tokens",
         "tutor_sessions",
-        "tutor_feedback",
         "session_states",
         "imports",
         "admin_audit_logs",

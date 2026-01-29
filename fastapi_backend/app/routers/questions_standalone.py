@@ -5,6 +5,7 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
+import logging
 
 from ..db import get_database
 from ..services.streak_service import StreakService
@@ -26,6 +27,8 @@ def slugify_question_title(title: str) -> str:
 
 async def find_question_by_identifier(db: AsyncIOMotorDatabase, identifier: str):
     """Find question by ID, titleSlug, or title"""
+    logger = logging.getLogger("uvicorn")
+    
     # Try to find by ObjectId first
     try:
         question = await db["questions"].find_one({"_id": ObjectId(identifier)})
@@ -94,8 +97,14 @@ async def get_question(
                 "question_id": question_obj_id
             })
             if user_question:
-                solved = user_question.get("solved", False)
-        except Exception:
+                # Strictly check solved status - must be explicitly True (not just truthy)
+                solved_value = user_question.get("solved")
+                solved = solved_value is True  # Only True, not truthy values
+                
+                # Warn if solved value is not a boolean
+                if solved_value is not None and not isinstance(solved_value, bool):
+                    solved = False
+        except Exception as e:
             pass
     
     # Fetch company name if company_id exists
@@ -232,7 +241,7 @@ async def solve_question(
         if question_doc and "legacy_id" in question_doc:
             set_on_insert_doc["question_legacy_id"] = question_doc["legacy_id"]
 
-    await db["user_questions"].update_one(
+    result = await db["user_questions"].update_one(
         {"user_id": user_obj_id, "question_id": question_obj_id},
         {
             "$set": set_doc,
@@ -240,6 +249,19 @@ async def solve_question(
         },
         upsert=True,
     )
+    
+    # Verify the update was successful
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"Marked question {question_obj_id} as solved for user {user_obj_id}. Matched: {result.matched_count}, Modified: {result.modified_count}, Upserted: {result.upserted_id}")
+    
+    # Verify the record exists and is marked as solved
+    verify_record = await db["user_questions"].find_one(
+        {"user_id": user_obj_id, "question_id": question_obj_id}
+    )
+    if verify_record:
+        logger.info(f"Verified: user_question record exists with solved={verify_record.get('solved')}")
+    else:
+        logger.error(f"ERROR: user_question record not found after update!")
     
     # Update streak
     streak_service = StreakService(db)
@@ -300,10 +322,24 @@ async def unsolve_question(
             detail="Invalid user_id",
         )
 
+    # Check if user_question exists before updating
+    existing_user_question = await db["user_questions"].find_one({
+        "user_id": user_obj_id,
+        "question_id": question_obj_id
+    })
+    
+    now = datetime.utcnow()
     result = await db["user_questions"].update_one(
         {"user_id": user_obj_id, "question_id": question_obj_id},
-        {"$set": {"solved": False}},
+        {
+            "$set": {
+                "solved": False,
+                "updated_at": now,
+                "last_attempt_at": now
+            }
+        },
     )
+    
     if result.matched_count == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     

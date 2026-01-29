@@ -53,20 +53,6 @@ async def create_analytics_indexes(db: AsyncIOMotorDatabase):
         ("session_start_time", DESCENDING)
     ], name="start_time_desc")
     
-    # tutor_feedback indexes
-    await db["tutor_feedback"].create_index([
-        ("timestamp", DESCENDING)
-    ], name="timestamp_desc")
-    
-    await db["tutor_feedback"].create_index([
-        ("rating", ASCENDING),
-        ("timestamp", DESCENDING)
-    ], name="rating_timestamp")
-    
-    await db["tutor_feedback"].create_index([
-        ("session_id", ASCENDING)
-    ], name="session_id", unique=True)
-    
     # chat_messages indexes (if not already created)
     await db["chat_messages"].create_index([
         ("user_id", ASCENDING),

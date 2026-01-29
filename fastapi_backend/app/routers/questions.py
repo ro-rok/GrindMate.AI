@@ -61,8 +61,9 @@ async def _current_user_solved_ids(
     except Exception:
         return set()
 
+    # Strictly check for solved=True (not just truthy) using $eq operator
     cursor = db["user_questions"].find(
-        {"user_id": user_obj_id, "solved": True}, {"question_id": 1}
+        {"user_id": user_obj_id, "solved": {"$eq": True}}, {"question_id": 1}
     )
     return {doc["question_id"] async for doc in cursor}
 

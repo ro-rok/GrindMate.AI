@@ -128,16 +128,30 @@ def create_app() -> FastAPI:
         
         # Helper function to get solved question IDs
         async def get_solved_ids(user_id: Optional[str]) -> set:
-            if not user_id:
+            import logging
+            logger = logging.getLogger("uvicorn")
+            
+            if not user_id or user_id.strip() == '':
+                logger.warning(f"get_solved_ids called with empty user_id: '{user_id}'")
                 return set()
             try:
                 user_obj_id = ObjectId(user_id)
-            except Exception:
+            except Exception as e:
+                logger.error(f"Invalid user_id format: '{user_id}', error: {e}")
                 return set()
+            
+            # Strictly check for solved=True (not just truthy)
             cursor = db["user_questions"].find(
-                {"user_id": user_obj_id, "solved": True}, {"question_id": 1}
+                {"user_id": user_obj_id, "solved": {"$eq": True}}, {"question_id": 1}
             )
-            return {doc["question_id"] async for doc in cursor}
+            solved_ids = {doc["question_id"] async for doc in cursor}
+            
+            # Debug logging
+            logger.info(f"User {user_id} (ObjectId: {user_obj_id}) has {len(solved_ids)} solved questions")
+            if len(solved_ids) > 0:
+                logger.info(f"Sample solved question IDs: {[str(id) for id in list(solved_ids)[:5]]}")
+            
+            return solved_ids
         
         # Helper function to build topic filters
         def build_topic_filters(topics_param: str) -> list[dict]:
@@ -168,15 +182,38 @@ def create_app() -> FastAPI:
                 query["$or"] = topic_filters
 
         solved_ids = await get_solved_ids(user_id)
+        
+        # Debug logging
+        import logging
+        logger = logging.getLogger("uvicorn")
+        logger.info(f"Querying questions for company {company_identifier} (ID: {company_obj_id}), user_id: {user_id}")
+        logger.info(f"Found {len(solved_ids)} solved questions for user {user_id}")
+        if len(solved_ids) > 0:
+            logger.info(f"Solved question ObjectIds: {[str(id) for id in list(solved_ids)[:10]]}")
 
         cursor = db["questions"].find(
             query,
             sort=[("frequency", 1), ("updated_at", 1)],
         )
         results: list[QuestionWithSolved] = []
+        solved_count = 0
         async for doc in cursor:
             # Check if solved before converting ObjectIds
-            is_solved = doc["_id"] in solved_ids
+            question_id = doc["_id"]
+            is_solved = question_id in solved_ids
+            
+            # Debug logging for first few questions and solved questions
+            if len(results) < 3 or is_solved:
+                logger.info(f"Question '{doc.get('title', 'Unknown')}' (ID: {question_id}) - Solved: {is_solved}")
+                if is_solved:
+                    logger.info(f"  ✓ This question IS in solved_ids set")
+                else:
+                    logger.info(f"  ✗ This question is NOT in solved_ids set (solved_ids contains {len(solved_ids)} items)")
+            
+            if is_solved:
+                solved_count += 1
+                # Log solved questions that match the filter
+                logger.debug(f"Solved question found: {doc.get('title')} (ID: {question_id}) matches company/timeframe filter")
             # Convert all ObjectId fields to strings for serialization
             # Create a new dict to avoid modifying the original
             clean_doc = {}
@@ -189,6 +226,9 @@ def create_app() -> FastAPI:
                     clean_doc[key] = value
             q = QuestionWithSolved(**clean_doc, solved=is_solved)
             results.append(q)
+        
+        # Debug logging
+        logger.info(f"Returning {len(results)} questions, {solved_count} marked as solved")
         return results
 
     return app

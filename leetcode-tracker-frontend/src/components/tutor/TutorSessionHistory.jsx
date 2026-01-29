@@ -61,7 +61,18 @@ const TutorSessionHistory = ({ userId }) => {
   };
 
   const handleQuestionClick = (question) => {
-    navigate(`/focus/${getQuestionIdentifier(question)}`);
+    // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+    // Use company-slug/question-slug format in URL
+    // If question has company info, use it; otherwise use a default
+    const companySlug = question.company_slug || question.companySlug || 'all';
+    const questionSlug = getQuestionIdentifier(question);
+    navigate(`/companies/${companySlug}/focus/${questionSlug}`, {
+      state: {
+        questionId: question.id, // Pass exact ObjectId to ensure correct question is loaded
+        questionSlug: questionSlug, // Also pass slug for reference
+        companyId: question.company_id || question.companyId // Pass company ID if available
+      }
+    });
   };
 
   const toggleSessionExpansion = (sessionId) => {

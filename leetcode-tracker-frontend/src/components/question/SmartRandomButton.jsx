@@ -59,7 +59,18 @@ export default function SmartRandomButton({
       if (onQuestionSelected) {
         onQuestionSelected(question);
       } else {
-        navigate(`/focus/${getQuestionIdentifier(question)}`);
+        // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+        // Use company-slug/question-slug format in URL
+        // If question has company info, use it; otherwise use a default or question's company
+        const companySlug = question.company_slug || question.companySlug || 'all';
+        const questionSlug = getQuestionIdentifier(question);
+        navigate(`/companies/${companySlug}/focus/${questionSlug}`, {
+          state: {
+            questionId: question.id, // Pass exact ObjectId to ensure correct question is loaded
+            questionSlug: questionSlug, // Also pass slug for reference
+            companyId: question.company_id || question.companyId // Pass company ID if available
+          }
+        });
       }
     } catch (err) {
       console.error('Failed to get smart random question:', err);

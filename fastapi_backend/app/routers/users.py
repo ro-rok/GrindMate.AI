@@ -248,7 +248,17 @@ async def get_user_analytics(
         "updated_at": {"$gte": today_start}
     }).to_list(length=None)
     
-    solved_today = sum(1 for q in today_questions if q.get("solved") and q.get("solved_at") and q.get("solved_at") >= today_start)
+    solved_today = 0
+    for q in today_questions:
+        if q.get("solved") and q.get("solved_at"):
+            solved_at = q.get("solved_at")
+            # Handle both timezone-aware and naive datetimes
+            if isinstance(solved_at, datetime):
+                if solved_at.tzinfo is None:
+                    # Assume UTC if naive
+                    solved_at = solved_at.replace(tzinfo=timezone.utc)
+                if solved_at >= today_start:
+                    solved_today += 1
     time_spent_today = sum(q.get("time_spent_seconds", 0) for q in today_questions)
     
     # Get recent question (last attempted/opened)

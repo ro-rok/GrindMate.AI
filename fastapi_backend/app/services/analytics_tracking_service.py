@@ -156,16 +156,6 @@ class AnalyticsTrackingService:
         ]
         avg_stats = await self.db["tutor_sessions"].aggregate(pipeline).to_list(1)
         
-        # Feedback distribution
-        feedback_pipeline = [
-            {"$match": {"timestamp": {"$gte": start_date}}},
-            {"$group": {
-                "_id": "$rating",
-                "count": {"$sum": 1}
-            }}
-        ]
-        feedback_dist = await self.db["tutor_feedback"].aggregate(feedback_pipeline).to_list(10)
-        
         return {
             "period_days": days,
             "active_users": len(active_users),
@@ -174,10 +164,7 @@ class AnalyticsTrackingService:
             "total_hints": total_hints,
             "avg_messages_per_session": avg_stats[0]["avg_messages"] if avg_stats else 0,
             "avg_hints_per_session": avg_stats[0]["avg_hints"] if avg_stats else 0,
-            "avg_time_per_session_seconds": avg_stats[0]["avg_time"] if avg_stats else 0,
-            "feedback_distribution": {
-                item["_id"]: item["count"] for item in feedback_dist
-            }
+            "avg_time_per_session_seconds": avg_stats[0]["avg_time"] if avg_stats else 0
         }
     
     async def get_rate_limit_metrics(
@@ -347,7 +334,6 @@ class AnalyticsTrackingService:
         collections = [
             "tutor_sessions",
             "chat_messages",
-            "tutor_feedback",
             "tutor_analytics_events"
         ]
         
@@ -382,71 +368,6 @@ class AnalyticsTrackingService:
             "index_stats": index_stats
         }
     
-    async def get_feedback_analysis(
-        self,
-        days: int = 30
-    ) -> Dict[str, Any]:
-        """
-        Get detailed feedback analysis
-        
-        Args:
-            days: Number of days to analyze
-            
-        Returns:
-            Dict with feedback analysis
-        """
-        start_date = datetime.now(UTC) - timedelta(days=days)
-        
-        # Overall feedback stats
-        total_feedback = await self.db["tutor_feedback"].count_documents({
-            "timestamp": {"$gte": start_date}
-        })
-        
-        # Rating distribution
-        rating_pipeline = [
-            {"$match": {"timestamp": {"$gte": start_date}}},
-            {"$group": {
-                "_id": "$rating",
-                "count": {"$sum": 1}
-            }}
-        ]
-        ratings = await self.db["tutor_feedback"].aggregate(rating_pipeline).to_list(10)
-        
-        # Feedback with text
-        feedback_with_text = await self.db["tutor_feedback"].count_documents({
-            "timestamp": {"$gte": start_date},
-            "feedback_text": {"$exists": True, "$ne": None, "$ne": ""}
-        })
-        
-        # Most common issues (from negative feedback)
-        negative_feedback = await self.db["tutor_feedback"].find({
-            "timestamp": {"$gte": start_date},
-            "rating": "negative",
-            "feedback_text": {"$exists": True, "$ne": None, "$ne": ""}
-        }).limit(50).to_list(50)
-        
-        # Satisfaction rate
-        positive_count = sum(r["count"] for r in ratings if r["_id"] == "positive")
-        satisfaction_rate = (positive_count / total_feedback * 100) if total_feedback > 0 else 0
-        
-        return {
-            "period_days": days,
-            "total_feedback": total_feedback,
-            "rating_distribution": {
-                item["_id"]: item["count"] for item in ratings
-            },
-            "feedback_with_text": feedback_with_text,
-            "satisfaction_rate_percent": round(satisfaction_rate, 1),
-            "recent_negative_feedback": [
-                {
-                    "session_id": str(fb["session_id"]),
-                    "text": fb["feedback_text"],
-                    "timestamp": fb["timestamp"].isoformat()
-                }
-                for fb in negative_feedback[:10]
-            ]
-        }
-    
     async def get_comprehensive_dashboard(
         self,
         days: int = 30
@@ -463,7 +384,6 @@ class AnalyticsTrackingService:
         engagement = await self.get_user_engagement_metrics(days)
         rate_limits = await self.get_rate_limit_metrics(days)
         costs = await self.get_cost_metrics(days)
-        feedback = await self.get_feedback_analysis(days)
         performance = await self.get_database_performance_metrics()
         
         return {

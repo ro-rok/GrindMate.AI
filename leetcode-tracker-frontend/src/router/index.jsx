@@ -111,10 +111,19 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: '/focus/:questionId',
+        path: '/companies/:companyId/focus/:questionId',
         element: (
           <SuspenseLayout>
             <FocusMode />
+          </SuspenseLayout>
+        ),
+      },
+      // Legacy route for backward compatibility - redirect to new format
+      {
+        path: '/focus/:questionId',
+        element: (
+          <SuspenseLayout>
+            <Navigate to="/companies" replace />
           </SuspenseLayout>
         ),
       },

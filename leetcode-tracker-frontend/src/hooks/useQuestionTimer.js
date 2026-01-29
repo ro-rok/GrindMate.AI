@@ -14,28 +14,50 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../api';
 
-export function useQuestionTimer(questionId, userId) {
+export function useQuestionTimer(questionId, userId, questionSolved = false) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
   const syncedRef = useRef(false);
+  const loadingRef = useRef(false);
+  const loadedQuestionRef = useRef(null);
 
   // Load timer state from backend on mount
   useEffect(() => {
+    // Create a unique key for this question/user combination
+    const questionKey = questionId && userId ? `${questionId}-${userId}` : null;
+    
+    // Prevent duplicate calls: check if already synced for this question or currently loading
     if (questionId && userId) {
+      // If already loaded this exact question/user combo, skip
+      if (loadedQuestionRef.current === questionKey && syncedRef.current) {
+        return;
+      }
+      
+      // If already loading, skip
+      if (loadingRef.current) {
+        return;
+      }
+      
       loadTimerState();
     } else if (questionId && !userId) {
-      // If no userId, still start a local timer
-      if (!startTimeRef.current) {
+      // If no userId, still start a local timer (but not if solved)
+      if (!questionSolved && !startTimeRef.current) {
         startTimeRef.current = Date.now();
+        setIsRunning(true);
       }
-      setIsRunning(true);
     }
-  }, [questionId, userId]);
+  }, [questionId, userId, questionSolved]);
 
   // Load timer state from backend
   const loadTimerState = async () => {
+    // Prevent concurrent calls
+    if (loadingRef.current) return;
+    
+    const questionKey = questionId && userId ? `${questionId}-${userId}` : null;
+    loadingRef.current = true;
+    
     try {
       const response = await api.get(`/timer/${questionId}/state`);
       const data = response.data;
@@ -49,16 +71,23 @@ export function useQuestionTimer(questionId, userId) {
       }
       
       syncedRef.current = true;
+      loadedQuestionRef.current = questionKey;
       
-      // If timer was not running, start it automatically when question is opened
-      if (!wasRunning && questionId && userId) {
+      // Don't auto-start timer if question is solved
+      // Only auto-start if timer was not running, we have questionId/userId, and question is not solved
+      if (!wasRunning && questionId && userId && !questionSolved) {
         // Small delay to ensure state is set before starting
         setTimeout(() => {
           startTimer();
         }, 100);
+      } else if (questionSolved && wasRunning) {
+        // If question is solved but timer was running, stop it
+        setIsRunning(false);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
       }
     } catch (err) {
-      console.error('Failed to load timer state:', err);
       // Fallback to localStorage
       const storageKey = `timer-${questionId}-${userId}`;
       const saved = localStorage.getItem(storageKey);
@@ -67,29 +96,34 @@ export function useQuestionTimer(questionId, userId) {
           const data = JSON.parse(saved);
           setElapsedTime(data.elapsedTime || 0);
           startTimeRef.current = data.startTime;
-          // If no saved running state, start timer
-          if (!data.isRunning && questionId && userId) {
+          // If no saved running state, start timer (but not if question is solved)
+          if (!data.isRunning && questionId && userId && !questionSolved) {
             setTimeout(() => {
               startTimer();
             }, 100);
+          } else if (questionSolved && data.isRunning) {
+            // If question is solved but timer was running, stop it
+            setIsRunning(false);
           }
         } catch (parseErr) {
-          console.error('Failed to parse saved timer:', parseErr);
-          // Start timer if we can't load state
-          if (questionId && userId) {
+          // Start timer if we can't load state (but not if question is solved)
+          if (questionId && userId && !questionSolved) {
             setTimeout(() => {
               startTimer();
             }, 100);
           }
         }
       } else {
-        // No saved state, start timer
-        if (questionId && userId) {
+        // No saved state, start timer (but not if question is solved)
+        if (questionId && userId && !questionSolved) {
           setTimeout(() => {
             startTimer();
           }, 100);
-        }
       }
+      }
+    } finally {
+      // Reset loading flag after completion
+      loadingRef.current = false;
     }
   };
 
@@ -141,7 +175,6 @@ export function useQuestionTimer(questionId, userId) {
         startTimeRef.current = new Date(data.started_at).getTime();
       }
     } catch (err) {
-      console.error('Failed to start timer:', err);
       // Fallback to local timer
       if (!startTimeRef.current) {
         startTimeRef.current = Date.now();
@@ -164,20 +197,44 @@ export function useQuestionTimer(questionId, userId) {
       setIsRunning(false);
       startTimeRef.current = null;
     } catch (err) {
-      console.error('Failed to stop timer:', err);
       // Fallback to local stop
       setIsRunning(false);
     }
   };
 
   // Reset timer
-  const resetTimer = () => {
+  const resetTimer = async () => {
+    // Stop timer on backend if it's running
+    if (isRunning && questionId) {
+      try {
+        await api.post('/timer/stop', {
+          question_id: questionId
+        });
+      } catch (err) {
+        // Failed to stop timer on backend during reset
+      }
+    }
+    
+    // Reset local state
     setElapsedTime(0);
     startTimeRef.current = null;
     setIsRunning(false);
+    
+    // Clear localStorage
     if (questionId && userId) {
       const storageKey = `timer-${questionId}-${userId}`;
       localStorage.removeItem(storageKey);
+    }
+    
+    // Reset on backend if we have questionId
+    if (questionId) {
+      try {
+        await api.post('/timer/reset', {
+          question_id: questionId
+        });
+      } catch (err) {
+        // Backend might not have reset endpoint, that's okay
+      }
     }
   };
 
@@ -195,7 +252,6 @@ export function useQuestionTimer(questionId, userId) {
       
       return true;
     } catch (err) {
-      console.error('Failed to save time:', err);
       return false;
     }
   };

@@ -36,10 +36,15 @@ function Dashboard() {
   
   const heroRef = useRef(null);
   const cardsRef = useRef(null);
+  const fetchingDataRef = useRef(false);
 
   // Fetch analytics data
   useEffect(() => {
+    // Prevent duplicate calls
+    if (fetchingDataRef.current) return;
+    
     const fetchData = async () => {
+      fetchingDataRef.current = true;
       try {
         setLoading(true);
         
@@ -63,11 +68,13 @@ function Dashboard() {
         }
       } finally {
         setLoading(false);
+        fetchingDataRef.current = false;
       }
     };
 
     fetchData();
-  }, [showToast, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only fetch once on mount
 
   // GSAP scroll animations
   useEffect(() => {

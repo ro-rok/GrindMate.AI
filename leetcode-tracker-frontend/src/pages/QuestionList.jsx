@@ -16,7 +16,7 @@ import Skeleton from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { getQuestionIdentifier } from '../utils/slugify';
+import { getQuestionIdentifier, getCompanyIdentifier } from '../utils/slugify';
 import api from '../api';
 
 /**
@@ -53,6 +53,11 @@ function QuestionList() {
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
   const fetchedCompaniesRef = useRef(new Set());
+  const fetchingQuestionsRef = useRef(false);
+  const lastFetchParamsRef = useRef(null);
+  const markingSolvedRef = useRef(new Set()); // Track in-flight solve/unsolve operations
+  const resettingProgressRef = useRef(false); // Track in-flight reset progress operation
+  
   // Fetch company details
   useEffect(() => {
     // Prevent double calls in React StrictMode - use Set to track fetched companyIds
@@ -62,11 +67,9 @@ function QuestionList() {
     const fetchCompany = async () => {
       try {
         const response = await api.get(`/companies/${companyId}`);
-        console.log('Company data received:', response.data);
         setCompany(response.data);
         setError(null); // Clear any previous errors
       } catch (err) {
-        console.error('Failed to fetch company:', err);
         
         // Provide specific error messages based on status code
         if (err.response?.status === 404) {
@@ -88,22 +91,37 @@ function QuestionList() {
   }, [companyId]);
 
   // Fetch questions
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (forceRefresh = false) => {
     if (!companyId) return;
 
+    const params = {
+      timeframe: filters.timeframe,
+      difficulty: filters.difficulty || '',
+      topics: filters.topics.join(','),
+      user_id: user?.id || '',
+    };
+    
+    // Debug: Log user_id to help diagnose solved status issues
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[QuestionList] Fetching questions with user_id:', params.user_id, 'isAuthenticated:', isAuthenticated);
+    }
+
+    // Prevent duplicate calls unless forced refresh
+    const paramsKey = JSON.stringify(params);
+    if (!forceRefresh && fetchingQuestionsRef.current && lastFetchParamsRef.current === paramsKey) {
+      return;
+    }
+
+    fetchingQuestionsRef.current = true;
+    lastFetchParamsRef.current = paramsKey;
     setIsLoading(true);
     setError(null);
 
     try {
-      const params = {
-        timeframe: filters.timeframe,
-        difficulty: filters.difficulty || '',
-        topics: filters.topics.join(','),
-        user_id: user?.id || '',
-      };
-
       const response = await api.get(`/companies/${companyId}/questions.json`, { params });
       const data = response.data;
+
+      const solvedCount = data.filter(q => q.solved).length;
 
       // Hydrate data - extract update months from the current timeframe
       setAllQuestions(data);
@@ -143,11 +161,11 @@ function QuestionList() {
         });
       }
     } catch (err) {
-      console.error('Failed to fetch questions:', err);
       setError('Failed to load questions');
       toast.error('Failed to load questions');
     } finally {
       setIsLoading(false);
+      fetchingQuestionsRef.current = false; // Reset fetching flag after completion
     }
   };
 
@@ -161,53 +179,66 @@ function QuestionList() {
 
   // Refresh questions when navigating back from FocusMode
   useEffect(() => {
+    // Check if we came from FocusMode (supports both old /focus/ and new /companies/.../focus/ formats)
     const wasOnFocusPage = prevLocationRef.current?.includes('/focus/');
     const isNowOnCompanyPage = location.pathname.includes(`/companies/${companyId}`);
+    const questionSolved = location.state?.questionSolved;
+    const solvedQuestionId = location.state?.questionId; // DB ID
+    const solvedQuestionSlug = location.state?.questionSlug; // Slug/identifier
     
     // If we navigated from FocusMode back to this company page, refresh questions
-    if (wasOnFocusPage && isNowOnCompanyPage && companyId && isAuthenticated) {
-      // Small delay to ensure backend has updated the solved status
-      const timeoutId = setTimeout(() => {
-        fetchQuestions();
-      }, 200);
-      
-      return () => clearTimeout(timeoutId);
+    // Also check for the questionSolved flag passed from FocusMode
+    if ((wasOnFocusPage && isNowOnCompanyPage) || questionSolved) {
+      if (companyId && isAuthenticated) {
+        // CRITICAL: Always fetch fresh solved status from backend
+        // Don't use optimistic updates - backend is single source of truth
+        fetchQuestions(true); // Force refresh to get latest solved status from backend
+      }
     }
     
     prevLocationRef.current = location.pathname;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, companyId, isAuthenticated]);
+  }, [location.pathname, location.state, companyId, isAuthenticated]);
 
   // Refresh questions when page becomes visible or focused (e.g., returning from FocusMode)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden && companyId && isAuthenticated) {
-        // Refresh questions when page becomes visible
-        fetchQuestions();
-      }
-    };
+  // Disabled to prevent duplicate calls - navigation detection handles refresh
+  // useEffect(() => {
+  //   const handleVisibilityChange = () => {
+  //     if (!document.hidden && companyId && isAuthenticated) {
+  //       // Refresh questions when page becomes visible
+  //       fetchQuestions();
+  //     }
+  //   };
 
-    const handleFocus = () => {
-      if (companyId && isAuthenticated) {
-        // Refresh questions when window regains focus
-        fetchQuestions();
-      }
-    };
+  //   const handleFocus = () => {
+  //     if (companyId && isAuthenticated) {
+  //       // Refresh questions when window regains focus
+  //       fetchQuestions();
+  //     }
+  //   };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
+  //   document.addEventListener('visibilitychange', handleVisibilityChange);
+  //   window.addEventListener('focus', handleFocus);
     
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, isAuthenticated]);
+  //   return () => {
+  //     document.removeEventListener('visibilitychange', handleVisibilityChange);
+  //     window.removeEventListener('focus', handleFocus);
+  //   };
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [companyId, isAuthenticated]);
 
   // Filter questions by active month
   useEffect(() => {
-    if (!activeMonth || allQuestions.length === 0) {
+    if (allQuestions.length === 0) {
       setDisplayedQuestions([]);
+      return;
+    }
+    
+    // If no activeMonth is selected, show all questions
+    if (!activeMonth) {
+      // Show all questions sorted by frequency
+      const sorted = [...allQuestions].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
+      setDisplayedQuestions(sorted);
       return;
     }
     
@@ -215,7 +246,7 @@ function QuestionList() {
     // This shows which questions were updated/imported in that specific populate run
     const filtered = allQuestions
       .filter(q => format(new Date(q.updated_at), 'MMM yy') === activeMonth)
-      .sort((a, b) => b.frequency - a.frequency);
+      .sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
     
     setDisplayedQuestions(filtered);
   }, [allQuestions, activeMonth]);
@@ -227,7 +258,6 @@ function QuestionList() {
         const response = await api.get(`/companies/${companyId}/topics`);
         setAvailableTopics(response.data);
       } catch (err) {
-        console.error('Failed to fetch topics:', err);
         // Extract topics from questions if endpoint doesn't exist
         if (allQuestions.length > 0) {
           const topicsSet = new Set();
@@ -248,6 +278,9 @@ function QuestionList() {
 
   // Handle populate
   const handlePopulate = async () => {
+    // Prevent duplicate calls (idempotency guard)
+    if (isPopulating) return;
+    
     if (!isAuthenticated) {
       toast('Sign up to populate questions!', { icon: '🔒' });
       navigate('/login');
@@ -294,7 +327,6 @@ function QuestionList() {
       const response = await api.get(`/companies/${companyId}/questions/random.json`, { params });
       setRandomQuestion(response.data);
     } catch (err) {
-      console.error('Failed to get random question:', err);
       toast.error('Failed to get random question');
     }
   };
@@ -313,9 +345,18 @@ function QuestionList() {
       window.open(leetcodeUrl, '_blank');
     }
     
-    // Navigate to Focus Mode with companyId in state for return navigation
-    navigate(`/focus/${getQuestionIdentifier(question)}`, {
-      state: { returnTo: `/companies/${companyId}` }
+    // Navigate to Focus Mode with company-slug/question-slug format
+    // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+    // The URL uses slugs for readability, but state contains the exact ID from QuestionList
+    const companySlug = company ? getCompanyIdentifier(company) : companyId;
+    const questionSlug = getQuestionIdentifier(question);
+    navigate(`/companies/${companySlug}/focus/${questionSlug}`, {
+      state: { 
+        returnTo: `/companies/${companyId}`,
+        questionId: question.id, // Pass exact ObjectId to ensure correct question is loaded
+        questionSlug: questionSlug, // Also pass slug for reference
+        companyId: companyId // Pass company ID for reference
+      }
     });
   };
 
@@ -330,8 +371,16 @@ function QuestionList() {
       
       case 'stuck':
         // Navigate to focus mode with AI tutor
-        navigate(`/focus/${getQuestionIdentifier(actionModalQuestion)}`, {
-          state: { returnTo: `/companies/${companyId}` }
+        // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+        const companySlugStuck = company ? getCompanyIdentifier(company) : companyId;
+        const questionSlugStuck = getQuestionIdentifier(actionModalQuestion);
+        navigate(`/companies/${companySlugStuck}/focus/${questionSlugStuck}`, {
+          state: { 
+            returnTo: `/companies/${companyId}`,
+            questionId: actionModalQuestion.id, // Pass exact ObjectId to ensure correct question is loaded
+            questionSlug: questionSlugStuck, // Also pass slug for reference
+            companyId: companyId // Pass company ID for reference
+          }
         });
         break;
       
@@ -347,29 +396,47 @@ function QuestionList() {
   };
 
   // Handle mark solved/unsolved
+  // CRITICAL: questionId parameter must be question.id (database ObjectId), not a slug
+  // This ensures consistency with backend queries and other solve/unsolve operations
   const handleMarkSolved = async (questionId, solved) => {
     if (!isAuthenticated) return;
+    
+    // Validate questionId is provided
+    if (!questionId) {
+      toast.error('Question identifier not available');
+      console.error('[QuestionList] Cannot mark solved/unsolved: missing questionId');
+      return;
+    }
+
+    // Idempotency guard: prevent duplicate calls for the same question/action
+    const operationKey = `${questionId}-${solved ? 'solve' : 'unsolve'}`;
+    if (markingSolvedRef.current.has(operationKey)) {
+      return; // Already processing this operation
+    }
+
+    markingSolvedRef.current.add(operationKey);
 
     try {
+      // CRITICAL: Always use question.id (ObjectId) for API calls
+      // Always include user_id parameter for authentication
       if (solved) {
         await api.post(`/questions/${questionId}/solve.json?user_id=${user.id}`);
       } else {
         await api.delete(`/questions/${questionId}/solve.json?user_id=${user.id}`);
       }
 
-      // Update local state
-      setAllQuestions(questions =>
-        questions.map(q => q.id === questionId ? { ...q, solved } : q)
-      );
-
-      if (randomQuestion?.id === questionId) {
-        setRandomQuestion(q => q ? { ...q, solved } : null);
-      }
+      // CRITICAL: Always fetch fresh solved status from backend after marking solved/unsolved
+      // Don't use optimistic updates - backend is single source of truth
+      await fetchQuestions(true); // Force refresh to get latest solved status from backend
 
       toast.success(solved ? 'Marked as solved!' : 'Marked as unsolved');
     } catch (err) {
-      console.error('Failed to update solve status:', err);
       toast.error('Failed to update solve status');
+      // On error, refresh from backend to ensure we have correct state
+      await fetchQuestions(true);
+    } finally {
+      // Remove from tracking set after completion
+      markingSolvedRef.current.delete(operationKey);
     }
   };
 
@@ -381,9 +448,16 @@ function QuestionList() {
       return;
     }
 
+    // Idempotency guard: prevent duplicate calls
+    if (resettingProgressRef.current) {
+      return;
+    }
+
     if (!confirm('Reset all progress for this company? This cannot be undone.')) {
       return;
     }
+
+    resettingProgressRef.current = true;
 
     try {
       await api.post('/users/reset_progress.json', {
@@ -395,8 +469,9 @@ function QuestionList() {
 
       await fetchQuestions();
     } catch (err) {
-      console.error('Failed to reset progress:', err);
       toast.error('Failed to reset progress');
+    } finally {
+      resettingProgressRef.current = false;
     }
   };
 
@@ -728,14 +803,31 @@ function QuestionList() {
                     if (question.leetcode_url) {
                       window.open(question.leetcode_url, '_blank');
                     }
-                    // Navigate to Focus Mode with companyId in state for return navigation
-                    navigate(`/focus/${getQuestionIdentifier(question)}`, {
-                      state: { returnTo: `/companies/${companyId}` }
+                    // Navigate to Focus Mode with company-slug/question-slug format
+                    // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+                    const companySlugStart = company ? getCompanyIdentifier(company) : companyId;
+                    const questionSlugStart = getQuestionIdentifier(question);
+                    navigate(`/companies/${companySlugStart}/focus/${questionSlugStart}`, {
+                      state: { 
+                        returnTo: `/companies/${companyId}`,
+                        questionId: question.id, // Pass exact ObjectId to ensure correct question is loaded
+                        questionSlug: questionSlugStart, // Also pass slug for reference
+                        companyId: companyId // Pass company ID for reference
+                      }
                     });
                   }}
                   onAskAI={(question) => {
-                    navigate(`/focus/${getQuestionIdentifier(question)}`, {
-                      state: { returnTo: `/companies/${companyId}` }
+                    // Navigate to Focus Mode with company-slug/question-slug format
+                    // CRITICAL: Pass question.id (ObjectId) in state to ensure exact question matching
+                    const companySlugAI = company ? getCompanyIdentifier(company) : companyId;
+                    const questionSlugAI = getQuestionIdentifier(question);
+                    navigate(`/companies/${companySlugAI}/focus/${questionSlugAI}`, {
+                      state: { 
+                        returnTo: `/companies/${companyId}`,
+                        questionId: question.id, // Pass exact ObjectId to ensure correct question is loaded
+                        questionSlug: questionSlugAI, // Also pass slug for reference
+                        companyId: companyId // Pass company ID for reference
+                      }
                     });
                     // Focus mode will open AI tutor tab
                   }}

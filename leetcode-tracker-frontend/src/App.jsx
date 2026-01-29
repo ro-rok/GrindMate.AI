@@ -76,6 +76,10 @@ export default function App() {
   const [allQuestions, setAllQuestions] = useState([])
   const [updateMonths, setUpdateMonths]   = useState([])    
   const [activeMonth, setActiveMonth]     = useState(null)
+  
+  // Refs to prevent duplicate API calls
+  const fetchedUserRef = useRef(false);
+  const fetchedCompaniesRef = useRef(false);
 
   // useEffect(() => {
   //   if (!company) return;
@@ -85,6 +89,9 @@ export default function App() {
   // }, [company]);
 
   useEffect(() => {
+    // Prevent duplicate calls
+    if (fetchedUserRef.current && fetchedCompaniesRef.current) return;
+    
     // Try to get user from localStorage first
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
@@ -95,21 +102,28 @@ export default function App() {
       }
     }
   
-    // Still try to fetch from API
-    api.get('/users/current.json')
-      .then(r => {
-        setUser(r.data);
-        localStorage.setItem('currentUser', JSON.stringify(r.data));
-      })
-      .catch(() => {
-        // Only clear if we don't already have a user
-        if (!savedUser) {
-          setUser(null);
-          localStorage.removeItem('currentUser');
-        }
-      });
+    // Still try to fetch from API (only if not already fetched)
+    if (!fetchedUserRef.current) {
+      fetchedUserRef.current = true;
+      api.get('/users/current.json')
+        .then(r => {
+          setUser(r.data);
+          localStorage.setItem('currentUser', JSON.stringify(r.data));
+        })
+        .catch(() => {
+          // Only clear if we don't already have a user
+          if (!savedUser) {
+            setUser(null);
+            localStorage.removeItem('currentUser');
+          }
+        });
+    }
     
-    api.get('/companies.json').then(r => setCompanies(r.data));
+    // Fetch companies (only if not already fetched)
+    if (!fetchedCompaniesRef.current) {
+      fetchedCompaniesRef.current = true;
+      api.get('/companies.json').then(r => setCompanies(r.data));
+    }
   }, []);
 
   const shownCompanies = (() => {
@@ -283,7 +297,13 @@ export default function App() {
 
   const unSolveRandom = async () => {
     if (!randomQ) return
-    await api.delete(`/questions/${randomQ.id}/solve.json`)
+    if (!user?.id) {
+      console.error('User not authenticated for unsolve operation')
+      return
+    }
+    // CRITICAL: Use question.id (database ObjectId) and always include user_id parameter
+    // This ensures consistency with other solve/unsolve operations
+    await api.delete(`/questions/${randomQ.id}/solve.json?user_id=${user.id}`)
     setRandomQ(r => r ? { ...r, solved: false } : null)
   }
 

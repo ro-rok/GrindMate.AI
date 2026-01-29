@@ -2,9 +2,9 @@
 AI Tutor Router V2 - Focus Mode Enhancement
 
 Provides endpoints for enhanced AI tutor with automatic question context injection,
-session tracking, feedback collection, and smart random selection.
+session tracking, and smart random selection.
 
-Requirements: 4.1-4.5, 6.5, 7.2-7.4, 8.3-8.4, 9.1-9.11, 13.1-13.8
+Requirements: 4.1-4.5, 6.5, 7.2-7.4, 9.1-9.11, 13.1-13.8
 """
 
 from typing import Optional, List
@@ -18,7 +18,6 @@ from ..auth import CurrentUser
 from ..db import get_database
 from ..services.tutor_service import get_tutor_service, TutorService
 from ..services.session_service import get_session_service, SessionService
-from ..services.feedback_service import get_feedback_service, FeedbackService
 from ..services.smart_random import get_smart_random_service, SmartRandomService
 
 
@@ -76,18 +75,6 @@ class TutorChatErrorResponse(BaseModel):
     invalid_fields: Optional[List[str]] = None
     reset_time_unix: Optional[int] = None
     requests_remaining: Optional[int] = None
-
-
-# Request/Response Models for POST /api/tutor/feedback
-class TutorFeedbackRequest(BaseModel):
-    session_id: str = Field(..., description="Session ID")
-    rating: str = Field(..., description="Rating: positive or negative")
-    feedback_text: Optional[str] = Field(default=None, description="Optional feedback text")
-
-
-class TutorFeedbackResponse(BaseModel):
-    feedback_id: str
-    message: str
 
 
 # Request/Response Models for POST /api/tutor/reset
@@ -548,105 +535,6 @@ async def get_tutor_sessions(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "error_message": f"Failed to get tutor sessions: {str(e)}"
-            }
-        )
-
-
-@router.post(
-    "/feedback",
-    response_model=TutorFeedbackResponse,
-    status_code=status.HTTP_200_OK
-)
-async def submit_tutor_feedback(
-    request: TutorFeedbackRequest,
-    current_user: CurrentUser,
-    db: AsyncIOMotorDatabase = Depends(get_database)
-):
-    """
-    Submit feedback for a tutor session.
-    
-    Requirements: 8.3, 8.4
-    
-    Validates:
-    - Required fields (session_id, rating)
-    - Rating is valid (positive or negative)
-    - Session exists and belongs to user
-    - No duplicate feedback
-    """
-    # Create service instance
-    feedback_service = FeedbackService(db)
-    
-    # Validate required fields
-    invalid_fields = []
-    
-    if not request.session_id:
-        invalid_fields.append("session_id")
-    if not request.rating:
-        invalid_fields.append("rating")
-    
-    if invalid_fields:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": "Invalid input",
-                "invalid_fields": invalid_fields
-            }
-        )
-    
-    # Validate rating
-    if request.rating not in ["positive", "negative"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": "Invalid rating. Must be 'positive' or 'negative'",
-                "invalid_fields": ["rating"]
-            }
-        )
-    
-    # Validate session_id format
-    try:
-        session_obj_id = ObjectId(request.session_id)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": "Invalid session_id format",
-                "invalid_fields": ["session_id"]
-            }
-        )
-    
-    # Extract user_id from JWT token
-    user_id = current_user.id
-    
-    try:
-        # Call FeedbackService.submit_feedback
-        feedback_id = await feedback_service.submit_feedback(
-            user_id=user_id,
-            session_id=session_obj_id,
-            rating=request.rating,
-            feedback_text=request.feedback_text
-        )
-        
-        # Return feedback_id with HTTP 200
-        return TutorFeedbackResponse(
-            feedback_id=str(feedback_id),
-            message="Thank you for your feedback!"
-        )
-        
-    except ValueError as e:
-        # Session not found, doesn't belong to user, or duplicate feedback
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error_message": str(e)
-            }
-        )
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error_message": f"Failed to submit feedback: {str(e)}"
             }
         )
 

@@ -24,7 +24,6 @@ class AnalyticsDashboardResponse(BaseModel):
     engagement: Dict[str, Any]
     rate_limits: Dict[str, Any]
     costs: Dict[str, Any]
-    feedback: Dict[str, Any]
     database_performance: Dict[str, Any]
 
 
@@ -38,7 +37,6 @@ class EngagementMetricsResponse(BaseModel):
     avg_messages_per_session: float
     avg_hints_per_session: float
     avg_time_per_session_seconds: float
-    feedback_distribution: Dict[str, int]
 
 
 class RateLimitMetricsResponse(BaseModel):
@@ -61,16 +59,6 @@ class CostMetricsResponse(BaseModel):
     byok_tokens: int
     cost_savings_from_byok_usd: float
     daily_breakdown: List[Dict[str, Any]]
-
-
-class FeedbackAnalysisResponse(BaseModel):
-    """Response model for feedback analysis"""
-    period_days: int
-    total_feedback: int
-    rating_distribution: Dict[str, int]
-    feedback_with_text: int
-    satisfaction_rate_percent: float
-    recent_negative_feedback: List[Dict[str, Any]]
 
 
 class DatabasePerformanceResponse(BaseModel):
@@ -207,38 +195,6 @@ async def get_cost_metrics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get cost metrics: {str(e)}"
-        )
-
-
-@router.get(
-    "/feedback",
-    response_model=FeedbackAnalysisResponse,
-    dependencies=[Depends(require_admin)]
-)
-async def get_feedback_analysis(
-    days: int = Query(default=30, ge=1, le=365, description="Number of days to analyze"),
-    db: AsyncIOMotorDatabase = Depends(get_database)
-):
-    """
-    Get feedback analysis
-    
-    Requires admin role.
-    
-    Returns:
-    - Total feedback count
-    - Rating distribution
-    - Satisfaction rate
-    - Recent negative feedback
-    """
-    analytics_service = get_analytics_tracking_service(db)
-    
-    try:
-        analysis = await analytics_service.get_feedback_analysis(days)
-        return FeedbackAnalysisResponse(**analysis)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get feedback analysis: {str(e)}"
         )
 
 

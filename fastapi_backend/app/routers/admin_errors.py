@@ -12,6 +12,7 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pymongo.errors import PyMongoError, DuplicateKeyError, ConnectionFailure
+from ..config import get_settings
 
 
 class AdminError(Exception):
@@ -54,6 +55,27 @@ class AuthorizationError(AdminError):
         super().__init__(message, status_code=403)
 
 
+def add_cors_headers(response: JSONResponse, request: Request) -> JSONResponse:
+    """
+    Add CORS headers to a response based on the request origin.
+    
+    This ensures that error responses include CORS headers so they can be
+    read by the frontend even when errors occur.
+    """
+    settings = get_settings()
+    origin = request.headers.get("origin")
+    
+    # Check if origin is allowed
+    allowed_origins = settings.frontend_origins_list
+    if origin and origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
+
+
 async def admin_error_handler(request: Request, exc: AdminError) -> JSONResponse:
     """
     Handle AdminError exceptions.
@@ -65,10 +87,11 @@ async def admin_error_handler(request: Request, exc: AdminError) -> JSONResponse
         **exc.details
     }
     
-    return JSONResponse(
+    response = JSONResponse(
         status_code=exc.status_code,
         content=response_data
     )
+    return add_cors_headers(response, request)
 
 
 async def parsing_error_handler(request: Request, exc: ParsingError) -> JSONResponse:
@@ -82,10 +105,11 @@ async def parsing_error_handler(request: Request, exc: ParsingError) -> JSONResp
         **exc.details
     }
     
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content=response_data
     )
+    return add_cors_headers(response, request)
 
 
 async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
@@ -99,10 +123,11 @@ async def validation_error_handler(request: Request, exc: ValidationError) -> JS
         "errors": exc.details.get("errors", [])
     }
     
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content=response_data
     )
+    return add_cors_headers(response, request)
 
 
 async def database_error_handler(request: Request, exc: DatabaseError) -> JSONResponse:
@@ -111,13 +136,14 @@ async def database_error_handler(request: Request, exc: DatabaseError) -> JSONRe
     
     Requirements: 15.3
     """
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "Database operation failed",
             "message": "An error occurred while processing your request. Please try again later."
         }
     )
+    return add_cors_headers(response, request)
 
 
 async def authorization_error_handler(request: Request, exc: AuthorizationError) -> JSONResponse:
@@ -126,13 +152,14 @@ async def authorization_error_handler(request: Request, exc: AuthorizationError)
     
     Requirements: 15.4
     """
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={
             "error": "Unauthorized",
             "message": "You do not have permission to access this resource."
         }
     )
+    return add_cors_headers(response, request)
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -161,20 +188,22 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         if exc.status_code in [400, 404, 429]:
             message = exc.detail if exc.detail else message
         
-        return JSONResponse(
+        response = JSONResponse(
             status_code=exc.status_code,
             content={
                 "error": message
             }
         )
+    else:
+        # For non-admin routes, return original exception
+        response = JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "detail": exc.detail
+            }
+        )
     
-    # For non-admin routes, return original exception
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "detail": exc.detail
-        }
-    )
+    return add_cors_headers(response, request)
 
 
 async def pymongo_error_handler(request: Request, exc: PyMongoError) -> JSONResponse:
@@ -189,7 +218,7 @@ async def pymongo_error_handler(request: Request, exc: PyMongoError) -> JSONResp
     
     # Return safe error message
     if isinstance(exc, DuplicateKeyError):
-        return JSONResponse(
+        response = JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
                 "error": "Duplicate entry",
@@ -197,7 +226,7 @@ async def pymongo_error_handler(request: Request, exc: PyMongoError) -> JSONResp
             }
         )
     elif isinstance(exc, ConnectionFailure):
-        return JSONResponse(
+        response = JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
                 "error": "Database unavailable",
@@ -205,13 +234,15 @@ async def pymongo_error_handler(request: Request, exc: PyMongoError) -> JSONResp
             }
         )
     else:
-        return JSONResponse(
+        response = JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "error": "Database operation failed",
                 "message": "An error occurred while processing your request. Please try again later."
             }
         )
+    
+    return add_cors_headers(response, request)
 
 
 async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
@@ -227,30 +258,32 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
         
         # If error message contains parsing hints, preserve them
         if "Could not parse" in error_message or "parse" in error_message.lower():
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
                     "error": "Could not parse input",
                     "message": error_message
                 }
             )
-        
-        # Generic validation error
-        return JSONResponse(
+        else:
+            # Generic validation error
+            response = JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Validation failed",
+                    "message": error_message
+                }
+            )
+    else:
+        # For non-admin routes, return generic error
+        response = JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={
-                "error": "Validation failed",
-                "message": error_message
+                "error": str(exc)
             }
         )
     
-    # For non-admin routes, return generic error
-    return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST,
-        content={
-            "error": str(exc)
-        }
-    )
+    return add_cors_headers(response, request)
 
 
 async def request_validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -269,13 +302,14 @@ async def request_validation_error_handler(request: Request, exc: RequestValidat
             "message": message
         })
     
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
             "error": "Validation failed",
             "errors": errors
         }
     )
+    return add_cors_headers(response, request)
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -290,21 +324,23 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     
     # For admin routes, return safe generic error
     if request.url.path.startswith("/api/admin"):
-        return JSONResponse(
+        response = JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "error": "Internal server error",
                 "message": "An unexpected error occurred. Please try again later."
             }
         )
+    else:
+        # For non-admin routes, return generic error
+        response = JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Internal server error"
+            }
+        )
     
-    # For non-admin routes, return generic error
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "error": "Internal server error"
-        }
-    )
+    return add_cors_headers(response, request)
 
 
 def register_admin_error_handlers(app):
