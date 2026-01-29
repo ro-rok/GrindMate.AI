@@ -48,7 +48,7 @@ function QuestionListView({
           solved={question.solved || false}
           attempted={question.attempted || false}
           starred={question.starred || false}
-          onStart={onStart}
+          onStart={onQuestionClick || onStart}
           onAskAI={onAskAI}
           onMarkSolved={onMarkSolved}
           onStar={onStar}

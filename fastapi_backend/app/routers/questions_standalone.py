@@ -186,6 +186,8 @@ async def solve_question(
             detail="Invalid user_id",
         )
     
+    # Fetch user document
+    user_doc = await db["users"].find_one({"_id": user_obj_id})
     if not user_doc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -197,6 +199,7 @@ async def solve_question(
         {"user_id": user_obj_id, "question_id": question_obj_id}
     )
 
+    now = datetime.utcnow()
     set_doc = {
         "user_id": user_obj_id,
         "question_id": question_obj_id,
