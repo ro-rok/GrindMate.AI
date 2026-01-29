@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from '../utils/toast';
 import useUIStore from '../store/uiStore';
@@ -62,9 +62,14 @@ function FocusMode() {
   
   const codeEditorRef = useRef(null);
   const notesEditorRef = useRef(null);
+  const hasInitializedRef = useRef(false);
 
   // Initialize session and start timer
   useEffect(() => {
+    // Prevent double initialization in React StrictMode
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     openFocusMode(questionId);
     fetchQuestion();
     initializeSession();
@@ -73,6 +78,7 @@ function FocusMode() {
     // No need to call startTimer() here as it's handled by the hook
 
     return () => {
+      hasInitializedRef.current = false;
       closeFocusMode();
       persistSession();
       // Timer continues running even after unmount
@@ -292,7 +298,12 @@ function FocusMode() {
     }
   };
 
+  const fetchQuestionContentRef = useRef(false);
   const fetchQuestionContent = async () => {
+    // Prevent double calls
+    if (fetchQuestionContentRef.current) return;
+    fetchQuestionContentRef.current = true;
+
     setLoadingContent(true);
     try {
       // Fetch from our backend proxy endpoint (avoids CORS issues)
@@ -301,7 +312,7 @@ function FocusMode() {
       if (response.data) {
         setQuestionContent(response.data);
         
-        // Show cache status in console for debugging
+        // Show cache status in console for debugging (only once)
         if (response.data.cached) {
           console.log('✅ Loaded cached LeetCode content');
         } else {
@@ -316,6 +327,7 @@ function FocusMode() {
       // The UI will show "Question description not available" message
     } finally {
       setLoadingContent(false);
+      fetchQuestionContentRef.current = false;
     }
   };
 

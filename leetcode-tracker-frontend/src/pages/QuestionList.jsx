@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
@@ -50,8 +50,13 @@ function QuestionList() {
   const [actionModalQuestion, setActionModalQuestion] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
+  const fetchCompanyRef = useRef(false);
   // Fetch company details
   useEffect(() => {
+    // Prevent double calls in React StrictMode
+    if (fetchCompanyRef.current) return;
+    fetchCompanyRef.current = true;
+
     const fetchCompany = async () => {
       try {
         const response = await api.get(`/companies/${companyId}`);
@@ -71,6 +76,8 @@ function QuestionList() {
         } else {
           setError('Failed to load company details. Please try again later.');
         }
+      } finally {
+        fetchCompanyRef.current = false;
       }
     };
 
@@ -148,7 +155,24 @@ function QuestionList() {
     if (companyId) {
       fetchQuestions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, filters.timeframe, filters.difficulty, filters.topics]);
+
+  // Refresh questions when page becomes visible (e.g., returning from FocusMode)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && companyId && isAuthenticated) {
+        // Refresh questions when page becomes visible
+        fetchQuestions();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, isAuthenticated]);
 
   // Filter questions by active month
   useEffect(() => {
