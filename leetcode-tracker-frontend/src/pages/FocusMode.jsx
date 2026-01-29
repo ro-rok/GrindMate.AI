@@ -66,6 +66,9 @@ function FocusMode() {
 
   // Initialize session and start timer
   useEffect(() => {
+    // Reset fetch content ref when questionId changes
+    fetchQuestionContentRef.current.clear();
+    
     // Prevent double initialization in React StrictMode
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
@@ -298,11 +301,11 @@ function FocusMode() {
     }
   };
 
-  const fetchQuestionContentRef = useRef(false);
+  const fetchQuestionContentRef = useRef(new Set());
   const fetchQuestionContent = async () => {
-    // Prevent double calls
-    if (fetchQuestionContentRef.current) return;
-    fetchQuestionContentRef.current = true;
+    // Prevent double calls - use Set to track by questionId
+    if (fetchQuestionContentRef.current.has(questionId)) return;
+    fetchQuestionContentRef.current.add(questionId);
 
     setLoadingContent(true);
     try {
@@ -312,7 +315,7 @@ function FocusMode() {
       if (response.data) {
         setQuestionContent(response.data);
         
-        // Show cache status in console for debugging (only once)
+        // Show cache status in console for debugging (only once per question)
         if (response.data.cached) {
           console.log('✅ Loaded cached LeetCode content');
         } else {
@@ -327,21 +330,20 @@ function FocusMode() {
       // The UI will show "Question description not available" message
     } finally {
       setLoadingContent(false);
-      fetchQuestionContentRef.current = false;
+      // Don't remove from set - keep it to prevent duplicate calls for this questionId
     }
   };
 
   const handleClose = () => {
-    // Don't show completion sheet if question is already solved
+    // Don't show completion sheet if question is already solved - just close immediately
     if (question?.solved || sessionState === 'solved' || sessionState === 'review') {
-      // Already solved, just close
       persistSession();
       stopTimer();
       navigate(-1);
       return;
     }
     
-    // Show completion sheet instead of immediately closing
+    // Show completion sheet only if question is not solved
     setShowCompletionSheet(true);
   };
 
@@ -393,36 +395,44 @@ function FocusMode() {
       await saveTime();
       
       // Mark as solved with time spent
-      await api.post(`/questions/${questionId}/solve.json?user_id=${user.id}`, {
+      const response = await api.post(`/questions/${questionId}/solve.json?user_id=${user.id}`, {
         time_spent_seconds: elapsedTime
       });
       
-      toast.success('Marked as solved! 🎉');
-      updateSessionState('solved');
-      
-      // End session with final time
-      if (sessionId) {
-        await api.post('/tutor/session/end', {
-          session_id: sessionId,
-          final_state: 'solved',
-          total_time: elapsedTime,
-        });
-      }
-      
-      // Update question solved status locally
-      setQuestion(prev => prev ? { ...prev, solved: true } : null);
-      
-      // Show completion sheet or feedback modal
-      if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
-        setShowFeedbackModal(true);
-      } else {
-        // Don't show completion sheet if already solved - just close
-        persistSession();
-        stopTimer();
-        navigate(-1);
+      // Check if the API call was successful
+      if (response.status === 200 || response.status === 201) {
+        toast.success('Marked as solved! 🎉');
+        updateSessionState('solved');
+        
+        // Update question solved status locally immediately
+        setQuestion(prev => prev ? { ...prev, solved: true } : null);
+        
+        // End session with final time
+        if (sessionId) {
+          try {
+            await api.post('/tutor/session/end', {
+              session_id: sessionId,
+              final_state: 'solved',
+              total_time: elapsedTime,
+            });
+          } catch (sessionErr) {
+            console.error('Failed to end session:', sessionErr);
+            // Don't block navigation if session end fails
+          }
+        }
+        
+        // Show completion sheet or feedback modal
+        if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
+          setShowFeedbackModal(true);
+        } else {
+          // Don't show completion sheet if already solved - just close
+          persistSession();
+          navigate(-1);
+        }
       }
     } catch (err) {
-      toast.error('Failed to mark as solved');
+      console.error('Failed to mark as solved:', err);
+      toast.error('Failed to mark as solved. Please try again.');
     }
   };
 
@@ -972,14 +982,16 @@ function FocusMode() {
         </div>
       </div>
 
-      {/* Completion Bottom Sheet */}
-      <CompletionBottomSheet
-        isOpen={showCompletionSheet}
-        onClose={handleCompletionClose}
-        onSolved={handleCompletionSolved}
-        onStuck={handleCompletionStuck}
-        questionTitle={question?.title}
-      />
+      {/* Completion Bottom Sheet - Only show if question is not solved */}
+      {!question?.solved && sessionState !== 'solved' && sessionState !== 'review' && (
+        <CompletionBottomSheet
+          isOpen={showCompletionSheet}
+          onClose={handleCompletionClose}
+          onSolved={handleCompletionSolved}
+          onStuck={handleCompletionStuck}
+          questionTitle={question?.title}
+        />
+      )}
 
       {/* Tutor Feedback Modal - Subtask 12.4 (Requirement 8.1) */}
       <TutorFeedbackModal

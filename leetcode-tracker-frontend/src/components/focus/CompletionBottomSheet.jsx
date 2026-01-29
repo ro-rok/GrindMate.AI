@@ -16,6 +16,7 @@ function CompletionBottomSheet({
   onSolved,
   onStuck,
   questionTitle,
+  hideSolved = false,
 }) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -51,14 +52,14 @@ function CompletionBottomSheet({
   if (!isOpen) return null;
 
   const options = [
-    {
+    ...(hideSolved ? [] : [{
       id: 'solved',
       icon: <FaCheckCircle className="text-2xl text-accent-success" />,
       title: 'Solved',
       description: 'I successfully solved this problem',
       action: onSolved,
       variant: 'success',
-    },
+    }]),
     {
       id: 'stuck',
       icon: <FaExclamationTriangle className="text-2xl text-accent-warning" />,
