@@ -69,8 +69,8 @@ function FocusMode() {
     fetchQuestion();
     initializeSession();
 
-    // Start timer automatically
-    startTimer();
+    // Timer will auto-start via useQuestionTimer hook when question loads
+    // No need to call startTimer() here as it's handled by the hook
 
     return () => {
       closeFocusMode();

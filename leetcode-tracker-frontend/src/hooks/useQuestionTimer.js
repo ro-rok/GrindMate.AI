@@ -25,6 +25,12 @@ export function useQuestionTimer(questionId, userId) {
   useEffect(() => {
     if (questionId && userId) {
       loadTimerState();
+    } else if (questionId && !userId) {
+      // If no userId, still start a local timer
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
+      }
+      setIsRunning(true);
     }
   }, [questionId, userId]);
 
@@ -35,13 +41,22 @@ export function useQuestionTimer(questionId, userId) {
       const data = response.data;
       
       setElapsedTime(data.elapsed_seconds || 0);
-      setIsRunning(data.is_running || false);
+      const wasRunning = data.is_running || false;
+      setIsRunning(wasRunning);
       
       if (data.started_at) {
         startTimeRef.current = new Date(data.started_at).getTime();
       }
       
       syncedRef.current = true;
+      
+      // If timer was not running, start it automatically when question is opened
+      if (!wasRunning && questionId && userId) {
+        // Small delay to ensure state is set before starting
+        setTimeout(() => {
+          startTimer();
+        }, 100);
+      }
     } catch (err) {
       console.error('Failed to load timer state:', err);
       // Fallback to localStorage
@@ -52,8 +67,27 @@ export function useQuestionTimer(questionId, userId) {
           const data = JSON.parse(saved);
           setElapsedTime(data.elapsedTime || 0);
           startTimeRef.current = data.startTime;
+          // If no saved running state, start timer
+          if (!data.isRunning && questionId && userId) {
+            setTimeout(() => {
+              startTimer();
+            }, 100);
+          }
         } catch (parseErr) {
           console.error('Failed to parse saved timer:', parseErr);
+          // Start timer if we can't load state
+          if (questionId && userId) {
+            setTimeout(() => {
+              startTimer();
+            }, 100);
+          }
+        }
+      } else {
+        // No saved state, start timer
+        if (questionId && userId) {
+          setTimeout(() => {
+            startTimer();
+          }, 100);
         }
       }
     }

@@ -111,6 +111,7 @@ function TutorPanel({
   const [resetTime, setResetTime] = useState(null);
   
   const chatEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
   const messageInputRef = useRef(null);
 
   // Tutor modes configuration
@@ -246,8 +247,52 @@ function TutorPanel({
 
   // Auto-scroll to bottom when chat history changes
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatHistory.length > 0) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+    }
   }, [chatHistory]);
+  
+  // Ensure chat area remains scrollable while typing
+  // Allow scrolling the chat container even when input is focused
+  useEffect(() => {
+    const chatContainer = chatContainerRef.current;
+    const input = messageInputRef.current;
+    if (!chatContainer || !input) return;
+
+    // Handle wheel events on the input to scroll the chat container
+    const handleInputWheel = (e) => {
+      // Only scroll chat if input is focused and user is scrolling
+      if (document.activeElement === input) {
+        const delta = e.deltaY;
+        const canScrollUp = chatContainer.scrollTop > 0;
+        const canScrollDown = chatContainer.scrollTop < chatContainer.scrollHeight - chatContainer.clientHeight;
+        
+        // If chat can scroll in the direction of the wheel, scroll it instead
+        if ((delta < 0 && canScrollUp) || (delta > 0 && canScrollDown)) {
+          chatContainer.scrollTop += delta;
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    // Also handle wheel on chat container itself
+    const handleContainerWheel = (e) => {
+      // Ensure smooth scrolling
+      chatContainer.scrollTop += e.deltaY;
+    };
+
+    input.addEventListener('wheel', handleInputWheel, { passive: false });
+    chatContainer.addEventListener('wheel', handleContainerWheel, { passive: true });
+    
+    return () => {
+      input.removeEventListener('wheel', handleInputWheel);
+      chatContainer.removeEventListener('wheel', handleContainerWheel);
+    };
+  }, []);
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -463,9 +508,27 @@ function TutorPanel({
         <div className="relative group my-2">
           <button
             className="absolute top-2 right-2 text-xs bg-black/70 opacity-0 group-hover:opacity-100 text-white px-2 py-1 rounded hover:bg-gray-700 transition-opacity z-10"
-            onClick={() => {
-              navigator.clipboard.writeText(codeText);
-              toast.success('Code copied to clipboard');
+            onClick={async () => {
+              try {
+                // Preserve formatting when copying code - use Clipboard API for better formatting support
+                await navigator.clipboard.writeText(codeText);
+                toast.success('Code copied to clipboard');
+              } catch (err) {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = codeText;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                  document.execCommand('copy');
+                  toast.success('Code copied to clipboard');
+                } catch (fallbackErr) {
+                  toast.error('Failed to copy code');
+                }
+                document.body.removeChild(textArea);
+              }
             }}
           >
             Copy
@@ -576,31 +639,6 @@ function TutorPanel({
             </div>
           )}
           
-          {/* Additional learning actions */}
-          {actionButtons.filter(btn => btn.category === 'learning' && !['approach', 'edge_cases', 'complexity'].includes(btn.action)).length > 0 && (
-            <div>
-              <div className="text-xs text-text-tertiary mb-1 px-1">More Help</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {actionButtons
-                  .filter(btn => btn.category === 'learning' && !['approach', 'edge_cases', 'complexity'].includes(btn.action))
-                  .map((btn) => (
-                    <button
-                      key={btn.action}
-                      onClick={() => handleActionButton(btn.action)}
-                      disabled={isLoading}
-                      className="px-2 py-1.5 rounded-md text-left transition-all text-xs bg-black-base border border-border-subtle hover:border-accent-primary text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={btn.description}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm">{btn.icon}</span>
-                        <span className="font-medium text-xs leading-tight">{btn.label}</span>
-                      </div>
-                    </button>
-                  ))}
-              </div>
-            </div>
-          )}
-          
           {/* Solution action (always last, prominent) */}
           <div>
             {actionButtons
@@ -685,13 +723,17 @@ function TutorPanel({
 
       {/* Chat History - Subtask 10.4 */}
       <div 
+        ref={chatContainerRef}
         className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-2 bg-black-base" 
         data-lenis-prevent
         style={{ 
           minHeight: 0, 
           flex: '1 1 0%',
           WebkitOverflowScrolling: 'touch',
-          position: 'relative'
+          position: 'relative',
+          // Ensure scrollable even when input is focused
+          touchAction: 'pan-y',
+          overscrollBehavior: 'contain'
         }}
       >
         {chatHistory.length === 0 ? (
