@@ -8,7 +8,7 @@ Requirements: 4.1-4.5, 6.5, 7.2-7.4, 8.3-8.4, 9.1-9.11, 13.1-13.8
 """
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel, Field
@@ -389,7 +389,7 @@ async def update_session(
     
     update_data = {
         "time_spent_seconds": request.elapsed_time,
-        "updated_at": datetime.now(UTC)
+        "updated_at": datetime.now(timezone.utc)
     }
     
     if request.state:
@@ -398,10 +398,16 @@ async def update_session(
     if request.hints_used is not None:
         update_data["hints_used"] = request.hints_used
     
-    await db["tutor_sessions"].update_one(
+    result = await db["tutor_sessions"].update_one(
         {"_id": session_obj_id, "user_id": ObjectId(current_user.id)},
         {"$set": update_data}
     )
+    
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found or access denied"
+        )
     
     return {"success": True}
 
@@ -437,11 +443,11 @@ async def end_session(
         {"_id": session_obj_id, "user_id": ObjectId(current_user.id)},
         {
             "$set": {
-                "session_end_time": datetime.now(UTC),
+                "session_end_time": datetime.now(timezone.utc),
                 "final_state": request.final_state,
                 "time_spent_seconds": request.total_time,
                 "solved": request.final_state == "solved",
-                "updated_at": datetime.now(UTC)
+                "updated_at": datetime.now(timezone.utc)
             }
         }
     )
@@ -463,8 +469,8 @@ async def end_session(
                 "$set": {
                     "time_spent_seconds": request.total_time,
                     "solved": True,
-                    "solved_at": datetime.now(UTC),
-                    "updated_at": datetime.now(UTC)
+                    "solved_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
                 }
             },
             upsert=True
