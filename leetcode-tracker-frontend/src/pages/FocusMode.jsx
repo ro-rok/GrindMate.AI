@@ -332,6 +332,15 @@ function FocusMode() {
   };
 
   const handleClose = () => {
+    // Don't show completion sheet if question is already solved
+    if (question?.solved || sessionState === 'solved' || sessionState === 'review') {
+      // Already solved, just close
+      persistSession();
+      stopTimer();
+      navigate(-1);
+      return;
+    }
+    
     // Show completion sheet instead of immediately closing
     setShowCompletionSheet(true);
   };
@@ -400,12 +409,17 @@ function FocusMode() {
         });
       }
       
+      // Update question solved status locally
+      setQuestion(prev => prev ? { ...prev, solved: true } : null);
+      
       // Show completion sheet or feedback modal
       if (usedTutor && sessionId && !isSessionDismissed(sessionId)) {
         setShowFeedbackModal(true);
       } else {
-        // Show completion sheet
-        setShowCompletionSheet(true);
+        // Don't show completion sheet if already solved - just close
+        persistSession();
+        stopTimer();
+        navigate(-1);
       }
     } catch (err) {
       toast.error('Failed to mark as solved');

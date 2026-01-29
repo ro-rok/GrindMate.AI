@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import toast from '../utils/toast';
@@ -32,8 +32,10 @@ import api from '../api';
 function QuestionList() {
   const { companyId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const prefersReducedMotion = useReducedMotion();
   const { isAuthenticated, user } = useAuthStore();
+  const prevLocationRef = useRef(location.pathname);
   
   const { filters, setFilters } = useQuestionStore();
 
@@ -158,7 +160,21 @@ function QuestionList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, filters.timeframe, filters.difficulty, filters.topics]);
 
-  // Refresh questions when page becomes visible (e.g., returning from FocusMode)
+  // Refresh questions when navigating back from FocusMode
+  useEffect(() => {
+    const wasOnFocusPage = prevLocationRef.current?.includes('/focus/');
+    const isNowOnCompanyPage = location.pathname.includes(`/companies/${companyId}`);
+    
+    // If we navigated from FocusMode back to this company page, refresh questions
+    if (wasOnFocusPage && isNowOnCompanyPage && companyId && isAuthenticated) {
+      fetchQuestions();
+    }
+    
+    prevLocationRef.current = location.pathname;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, companyId, isAuthenticated]);
+
+  // Refresh questions when page becomes visible or focused (e.g., returning from FocusMode)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && companyId && isAuthenticated) {
@@ -167,9 +183,19 @@ function QuestionList() {
       }
     };
 
+    const handleFocus = () => {
+      if (companyId && isAuthenticated) {
+        // Refresh questions when window regains focus
+        fetchQuestions();
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, isAuthenticated]);
