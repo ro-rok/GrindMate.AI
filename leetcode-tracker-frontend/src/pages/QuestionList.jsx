@@ -52,12 +52,12 @@ function QuestionList() {
   const [actionModalQuestion, setActionModalQuestion] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
 
-  const fetchCompanyRef = useRef(false);
+  const fetchedCompaniesRef = useRef(new Set());
   // Fetch company details
   useEffect(() => {
-    // Prevent double calls in React StrictMode
-    if (fetchCompanyRef.current) return;
-    fetchCompanyRef.current = true;
+    // Prevent double calls in React StrictMode - use Set to track fetched companyIds
+    if (!companyId || fetchedCompaniesRef.current.has(companyId)) return;
+    fetchedCompaniesRef.current.add(companyId);
 
     const fetchCompany = async () => {
       try {
@@ -78,9 +78,8 @@ function QuestionList() {
         } else {
           setError('Failed to load company details. Please try again later.');
         }
-      } finally {
-        fetchCompanyRef.current = false;
       }
+      // Don't remove from Set - prevents double calls even in StrictMode
     };
 
     if (companyId) {
@@ -167,7 +166,12 @@ function QuestionList() {
     
     // If we navigated from FocusMode back to this company page, refresh questions
     if (wasOnFocusPage && isNowOnCompanyPage && companyId && isAuthenticated) {
-      fetchQuestions();
+      // Small delay to ensure backend has updated the solved status
+      const timeoutId = setTimeout(() => {
+        fetchQuestions();
+      }, 200);
+      
+      return () => clearTimeout(timeoutId);
     }
     
     prevLocationRef.current = location.pathname;

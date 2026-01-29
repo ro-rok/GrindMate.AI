@@ -38,6 +38,11 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/ping",
     }
     
+    # Path prefixes that don't require CSRF protection (already protected by authentication)
+    EXEMPT_PREFIXES = {
+        "/timer",  # Timer endpoints require authentication, CSRF not needed
+    }
+    
     async def dispatch(self, request: Request, call_next):
         """
         Validate CSRF token for protected requests.
@@ -49,6 +54,11 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Skip CSRF check for exempt paths
         if request.url.path in self.EXEMPT_PATHS:
             return await call_next(request)
+        
+        # Skip CSRF check for exempt path prefixes (already protected by authentication)
+        for prefix in self.EXEMPT_PREFIXES:
+            if request.url.path.startswith(prefix):
+                return await call_next(request)
         
         # Skip CSRF check for admin endpoints (already protected by authentication)
         if request.url.path.startswith("/api/admin"):

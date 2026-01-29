@@ -68,14 +68,17 @@ function FocusMode() {
   const notesEditorRef = useRef(null);
   const hasInitializedRef = useRef(false);
 
+  // Track initialized questionIds to prevent double initialization
+  const initializedQuestionsRef = useRef(new Set());
+  
   // Initialize session and start timer
   useEffect(() => {
-    // Reset fetch content ref when questionId changes
-    fetchQuestionContentRef.current.clear();
+    // Prevent double initialization in React StrictMode - use Set to track by questionId
+    if (!questionId || initializedQuestionsRef.current.has(questionId)) return;
+    initializedQuestionsRef.current.add(questionId);
     
-    // Prevent double initialization in React StrictMode
-    if (hasInitializedRef.current) return;
-    hasInitializedRef.current = true;
+    // Reset fetch content ref when questionId changes (for new questions)
+    fetchQuestionContentRef.current.clear();
 
     openFocusMode(questionId);
     fetchQuestion();
@@ -85,7 +88,8 @@ function FocusMode() {
     // No need to call startTimer() here as it's handled by the hook
 
     return () => {
-      hasInitializedRef.current = false;
+      // Only remove from Set when component unmounts (not on re-render)
+      initializedQuestionsRef.current.delete(questionId);
       closeFocusMode();
       persistSession();
       // Timer continues running even after unmount
@@ -308,6 +312,7 @@ function FocusMode() {
   const fetchQuestionContentRef = useRef(new Set());
   const fetchQuestionContent = async () => {
     // Prevent double calls - use Set to track by questionId
+    // This persists across renders in React StrictMode
     if (fetchQuestionContentRef.current.has(questionId)) return;
     fetchQuestionContentRef.current.add(questionId);
 
@@ -332,9 +337,11 @@ function FocusMode() {
       console.error('Failed to fetch question content:', err);
       // Don't show error toast - content is optional
       // The UI will show "Question description not available" message
+      // Remove from Set on error so it can retry
+      fetchQuestionContentRef.current.delete(questionId);
     } finally {
       setLoadingContent(false);
-      // Don't remove from set - keep it to prevent duplicate calls for this questionId
+      // Don't remove from set on success - keep it to prevent duplicate calls
     }
   };
 
@@ -431,7 +438,10 @@ function FocusMode() {
         } else {
           // Don't show completion sheet if already solved - just close
           persistSession();
-          navigate(returnPath);
+          // Small delay to ensure backend has processed the solve status
+          setTimeout(() => {
+            navigate(returnPath);
+          }, 100);
         }
       }
     } catch (err) {

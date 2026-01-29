@@ -132,13 +132,22 @@ class StreakService:
             milestone_reached = new_streak
         
         # Update database
+        # Convert current_date to datetime at midnight in UTC for storage
+        # We need to create a datetime object from the date
+        from datetime import time as dt_time
+        last_solve_datetime = datetime.combine(current_date, dt_time.min)
+        # Ensure it's timezone-aware (UTC)
+        if last_solve_datetime.tzinfo is None:
+            from datetime import timezone
+            last_solve_datetime = last_solve_datetime.replace(tzinfo=timezone.utc)
+        
         await self.db["users"].update_one(
             {"_id": user_id},
             {
                 "$set": {
                     "current_streak": new_streak,
                     "longest_streak": new_longest_streak,
-                    "last_solve_date": datetime.combine(current_date, datetime.min.time()),
+                    "last_solve_date": last_solve_datetime,
                     "updated_at": datetime.utcnow()
                 }
             }
@@ -215,12 +224,20 @@ class StreakService:
             last_solve_date = most_recent_solve.date()
         
         # Update database
+        # Convert last_solve_date to datetime at midnight in UTC for storage
+        from datetime import time as dt_time
+        last_solve_datetime = datetime.combine(last_solve_date, dt_time.min)
+        # Ensure it's timezone-aware (UTC)
+        if last_solve_datetime.tzinfo is None:
+            from datetime import timezone
+            last_solve_datetime = last_solve_datetime.replace(tzinfo=timezone.utc)
+        
         await self.db["users"].update_one(
             {"_id": user_id},
             {
                 "$set": {
                     "current_streak": new_streak,
-                    "last_solve_date": datetime.combine(last_solve_date, datetime.min.time()),
+                    "last_solve_date": last_solve_datetime,
                     "updated_at": datetime.utcnow()
                 }
             }

@@ -132,14 +132,19 @@ const StreakCard = ({
         transition={{ duration: 0.6, ease: 'easeOut' }}
       >
         <div className="text-5xl font-bold text-accent-primary mb-2">
-          {currentStreak}
+          {currentStreak ?? 0}
           <span className="text-2xl text-text-secondary ml-2">
             {currentStreak === 1 ? 'day' : 'days'}
           </span>
         </div>
         <div className="text-sm text-text-secondary">
-          Longest streak: <span className="text-text-primary font-medium">{longestStreak} days</span>
+          Longest streak: <span className="text-text-primary font-medium">{longestStreak ?? 0} days</span>
         </div>
+        {currentStreak === 0 && (
+          <div className="mt-3 text-xs text-text-tertiary italic">
+            Solve a problem today to start your streak! 🔥
+          </div>
+        )}
       </motion.div>
 
       {/* Calendar heatmap */}
@@ -147,32 +152,38 @@ const StreakCard = ({
         <h4 className="text-sm font-medium text-text-secondary mb-3">
           Last 30 days
         </h4>
-        <div className="grid grid-cols-10 gap-1.5">
-          {calendarHeatmap.map((day, index) => {
-            const count = day.count || 0;
-            const intensity = count === 0 ? 0 : Math.min(count / 3, 1);
-            
-            return (
-              <motion.div
-                key={day.date || index}
-                className="aspect-square rounded-sm cursor-pointer group relative"
-                style={{
-                  backgroundColor: count === 0 
-                    ? 'rgba(255, 255, 255, 0.05)' 
-                    : `rgba(14, 165, 233, ${0.3 + intensity * 0.7})`,
-                }}
-                whileHover={prefersReducedMotion ? {} : { scale: 1.2 }}
-                transition={{ duration: 0.15 }}
-                title={`${day.date}: ${count} ${count === 1 ? 'solve' : 'solves'}`}
-              >
-                {/* Tooltip on hover */}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black-elevated border border-border-subtle rounded text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                  {day.date}: {count} {count === 1 ? 'solve' : 'solves'}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+        {calendarHeatmap && calendarHeatmap.length > 0 ? (
+          <div className="grid grid-cols-10 gap-1.5">
+            {calendarHeatmap.map((day, index) => {
+              const count = day?.count ?? 0;
+              const intensity = count === 0 ? 0 : Math.min(count / 3, 1);
+              
+              return (
+                <motion.div
+                  key={day?.date || index}
+                  className="aspect-square rounded-sm cursor-pointer group relative"
+                  style={{
+                    backgroundColor: count === 0 
+                      ? 'rgba(255, 255, 255, 0.05)' 
+                      : `rgba(14, 165, 233, ${0.3 + intensity * 0.7})`,
+                  }}
+                  whileHover={prefersReducedMotion ? {} : { scale: 1.2 }}
+                  transition={{ duration: 0.15 }}
+                  title={`${day?.date || 'Unknown'}: ${count} ${count === 1 ? 'solve' : 'solves'}`}
+                >
+                  {/* Tooltip on hover */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black-elevated border border-border-subtle rounded text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+                    {day?.date || 'Unknown'}: {count} {count === 1 ? 'solve' : 'solves'}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-text-tertiary text-center py-4">
+            No activity data available
+          </div>
+        )}
       </div>
 
       {/* Milestone badges */}

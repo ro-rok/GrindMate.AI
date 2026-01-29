@@ -4,7 +4,9 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import api from '../api';
 import useAuthStore from '../store/authStore';
+import Button from '../components/ui/Button';
 import StreakCard from '../components/dashboard/StreakCard';
+import StatsCard from '../components/dashboard/StatsCard';
 import WeakTopicsCard from '../components/dashboard/WeakTopicsCard';
 import DifficultyBreakdownCard from '../components/dashboard/DifficultyBreakdownCard';
 import CalendarHeatmapCard from '../components/dashboard/CalendarHeatmapCard';
@@ -72,10 +74,58 @@ function Analytics() {
         api.get('/users/me/streak'),
       ]);
       
-      setAnalytics(analyticsRes.data);
-      setStreak(streakRes.data);
+      // Transform analytics response to match expected format
+      const analyticsData = analyticsRes.data;
+      const streakData = streakRes.data;
+      
+      // Debug logging
+      console.log('Analytics data received:', analyticsData);
+      console.log('Streak data received:', streakData);
+      console.log('Solve stats:', analyticsData.solve_stats);
+      console.log('Analytics streak:', analyticsData.streak);
+      
+      // Map streak data to match component expectations
+      // Priority: analyticsData.streak (from /users/me/analytics) > streakData (from /users/me/streak)
+      const mappedStreak = {
+        current_streak: analyticsData.streak?.current ?? streakData?.current_streak ?? 0,
+        longest_streak: analyticsData.streak?.longest ?? streakData?.longest_streak ?? 0,
+        last_solve_date: analyticsData.streak?.last_solve_date ?? streakData?.last_solve_date ?? null,
+      };
+      
+      console.log('Mapped streak:', mappedStreak);
+      
+      const transformedAnalytics = {
+        streak: analyticsData.streak,
+        solve_stats: {
+          total_solved: analyticsData.solve_stats?.total_solved ?? 0,
+          solved_today: analyticsData.solve_stats?.solved_today ?? 0,
+          time_spent_today_seconds: analyticsData.solve_stats?.time_spent_today_seconds ?? 0,
+          by_difficulty: analyticsData.solve_stats?.by_difficulty ?? { EASY: 0, MEDIUM: 0, HARD: 0 },
+          solve_rate_last_10: analyticsData.solve_stats?.solve_rate_last_10 ?? 0,
+        },
+        weak_topics: analyticsData.weak_topics ?? [],
+        pattern_distribution: analyticsData.pattern_distribution ?? {},
+        difficulty_breakdown: analyticsData.solve_stats?.by_difficulty ?? { EASY: 0, MEDIUM: 0, HARD: 0 },
+        heatmap: streakData?.calendar_heatmap ?? [],
+      };
+      
+      console.log('Transformed analytics:', transformedAnalytics);
+      console.log('Final streak values:', {
+        streak_current: streak?.current_streak,
+        streak_longest: streak?.longest_streak,
+        analytics_streak_current: analyticsData.streak?.current,
+        analytics_streak_longest: analyticsData.streak?.longest,
+      });
+      
+      setAnalytics(transformedAnalytics);
+      setStreak(mappedStreak);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);
+      console.error('Error details:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: err.message,
+      });
       
       // If we get a 401, the session is invalid - update auth state
       if (err.response?.status === 401) {
@@ -83,6 +133,10 @@ function Analytics() {
         // Show demo data instead
         setAnalytics(getDemoAnalytics());
         setStreak(getDemoStreak());
+      } else if (err.response?.status === 403) {
+        setError('Access denied. Please check your authentication.');
+      } else if (err.response?.status >= 500) {
+        setError('Server error. Please try again later.');
       } else {
         setError(err.response?.data?.detail || err.message || 'Failed to load analytics');
       }
@@ -145,19 +199,30 @@ function Analytics() {
         )}
       </motion.div>
 
+      {/* Stats Card - Full width */}
+      <div className="mb-4" ref={(el) => (cardsRef.current[0] = el)}>
+        <StatsCard
+          totalSolved={analytics?.solve_stats?.total_solved || 0}
+          solvedToday={analytics?.solve_stats?.solved_today || 0}
+          timeSpentTodaySeconds={analytics?.solve_stats?.time_spent_today_seconds || 0}
+          isDemo={!isAuthenticated}
+          cardVariant="glass"
+        />
+      </div>
+
       {/* Analytics cards grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" role="region" aria-label="Analytics dashboard">
-        <div ref={(el) => (cardsRef.current[0] = el)}>
+        <div ref={(el) => (cardsRef.current[1] = el)}>
           <StreakCard
-            currentStreak={streak?.current_streak || 0}
-            longestStreak={streak?.longest_streak || 0}
-            calendarHeatmap={analytics?.heatmap || []}
+            currentStreak={streak?.current_streak ?? analytics?.streak?.current ?? 0}
+            longestStreak={streak?.longest_streak ?? analytics?.streak?.longest ?? 0}
+            calendarHeatmap={analytics?.heatmap ?? streak?.calendar_heatmap ?? []}
             isDemo={!isAuthenticated}
             cardVariant="glass"
           />
         </div>
 
-        <div ref={(el) => (cardsRef.current[1] = el)}>
+        <div ref={(el) => (cardsRef.current[2] = el)}>
           <DifficultyBreakdownCard
             difficultyBreakdown={analytics?.difficulty_breakdown || { EASY: 0, MEDIUM: 0, HARD: 0 }}
             isDemo={!isAuthenticated}
@@ -165,7 +230,7 @@ function Analytics() {
           />
         </div>
 
-        <div ref={(el) => (cardsRef.current[2] = el)}>
+        <div ref={(el) => (cardsRef.current[3] = el)}>
           <CalendarHeatmapCard
             heatmapData={analytics?.heatmap || []}
             isDemo={!isAuthenticated}
@@ -173,7 +238,7 @@ function Analytics() {
           />
         </div>
 
-        <div ref={(el) => (cardsRef.current[3] = el)}>
+        <div ref={(el) => (cardsRef.current[4] = el)}>
           <WeakTopicsCard
             weakTopics={analytics?.weak_topics || []}
             onTopicClick={handleTopicClick}
@@ -189,6 +254,13 @@ function Analytics() {
 // Demo data functions for anonymous users
 function getDemoAnalytics() {
   return {
+    solve_stats: {
+      total_solved: 25,
+      solved_today: 3,
+      time_spent_today_seconds: 7200, // 2 hours
+      by_difficulty: { EASY: 15, MEDIUM: 8, HARD: 2 },
+      solve_rate_last_10: 0.8,
+    },
     weak_topics: [
       { topic: 'dynamic-programming', solve_rate: 0.4, attempts: 10, solved: 4 },
       { topic: 'graph-algorithms', solve_rate: 0.45, attempts: 8, solved: 3 },
