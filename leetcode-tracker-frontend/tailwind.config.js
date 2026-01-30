@@ -7,6 +7,10 @@ export default {
     ],
     theme: {
       extend: {
+        // Breakpoints - add xs for extra small screens
+        screens: {
+          'xs': '475px',
+        },
         // Surface hierarchy
         colors: {
           'bg-base': 'var(--bg-base)',

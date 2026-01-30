@@ -40,7 +40,7 @@ function QuestionListView({
 
   // Render all questions normally - no virtualization to avoid nested scroll
   return (
-    <div className="w-full space-y-[var(--space-1_5)]">
+    <div className="w-full space-y-[var(--space-1_5)] overflow-x-hidden">
       {questions.map((question, index) => (
         <QuestionRow
           key={question.id || index}

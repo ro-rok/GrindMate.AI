@@ -2,7 +2,7 @@
 CSRF protection middleware using double-submit cookie pattern.
 
 The CSRF token is stored in both:
-1. An HttpOnly cookie (csrf_token) - cannot be read by JavaScript
+1. A non-HttpOnly cookie (csrf_token) - can be read by JavaScript
 2. Response body on login/register - frontend stores this and sends in X-CSRF-Token header
 
 For state-changing requests (POST, PUT, DELETE, PATCH), the middleware validates
@@ -32,16 +32,18 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         "/users/sign_out",
         "/users/sign_out.json",
         "/auth/refresh",  # Refresh endpoint uses refresh token cookie, not CSRF
+        "/auth/forget-password/initiate",
+        "/auth/forget-password/initiate.json",
+        "/auth/forget-password/verify",
+        "/auth/forget-password/verify.json",
         "/docs",
         "/openapi.json",
         "/redoc",
         "/ping",
     }
     
-    # Path prefixes that don't require CSRF protection (already protected by authentication)
-    EXEMPT_PREFIXES = {
-        "/timer",  # Timer endpoints require authentication, CSRF not needed
-    }
+    # Path prefixes that don't require CSRF protection
+    EXEMPT_PREFIXES = set()  # Empty - all endpoints require CSRF unless explicitly listed above
     
     async def dispatch(self, request: Request, call_next):
         """
@@ -55,14 +57,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.url.path in self.EXEMPT_PATHS:
             return await call_next(request)
         
-        # Skip CSRF check for exempt path prefixes (already protected by authentication)
+        # Skip CSRF check for exempt path prefixes
         for prefix in self.EXEMPT_PREFIXES:
             if request.url.path.startswith(prefix):
                 return await call_next(request)
-        
-        # Skip CSRF check for admin endpoints (already protected by authentication)
-        if request.url.path.startswith("/api/admin"):
-            return await call_next(request)
         
         # Get CSRF token from header
         csrf_header = request.headers.get("X-CSRF-Token")
@@ -73,6 +71,15 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         
         # Validate tokens match
         if not csrf_header or not csrf_cookie:
+            # Log for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"CSRF validation failed for {request.method} {request.url.path}: "
+                f"header={'present' if csrf_header else 'missing'}, "
+                f"cookie={'present' if csrf_cookie else 'missing'}, "
+                f"all_cookies={list(request.cookies.keys())}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="CSRF token missing"

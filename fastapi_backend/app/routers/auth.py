@@ -68,6 +68,7 @@ def set_auth_cookies(
         httponly=True,
         secure=cookie_secure,
         samesite=cookie_samesite,
+        path="/",
         max_age=settings.access_token_expire_minutes * 60,
     )
     
@@ -78,6 +79,7 @@ def set_auth_cookies(
         httponly=True,
         secure=cookie_secure,
         samesite=cookie_samesite,
+        path="/",
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
     )
     
@@ -88,6 +90,7 @@ def set_auth_cookies(
         httponly=False,  # JS needs to read this
         secure=cookie_secure,
         samesite=cookie_samesite,
+        path="/",
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
     )
 

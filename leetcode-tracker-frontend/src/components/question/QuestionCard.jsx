@@ -75,14 +75,23 @@ const QuestionCard = ({
           {/* Topics */}
           {question.topics && (
             <div className="flex flex-wrap gap-1.5">
-              {question.topics.split(',').slice(0, 3).map((topic, idx) => (
-                <Badge key={idx} variant="default" size="sm">
+              {question.topics.split(',').slice(0, 5).map((topic, idx) => (
+                <Badge 
+                  key={idx} 
+                  variant="secondary" 
+                  size="sm"
+                  className="bg-[var(--bg-surface-2)] border border-[var(--border-default)] text-[var(--text-secondary)]"
+                >
                   {topic.trim()}
                 </Badge>
               ))}
-              {question.topics.split(',').length > 3 && (
-                <Badge variant="default" size="sm">
-                  +{question.topics.split(',').length - 3}
+              {question.topics.split(',').length > 5 && (
+                <Badge 
+                  variant="secondary" 
+                  size="sm"
+                  className="bg-[var(--bg-surface-2)] border border-[var(--border-default)] text-[var(--text-secondary)]"
+                >
+                  +{question.topics.split(',').length - 5}
                 </Badge>
               )}
             </div>

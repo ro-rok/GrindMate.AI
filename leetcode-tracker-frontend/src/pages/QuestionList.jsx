@@ -175,7 +175,7 @@ function QuestionList() {
       fetchQuestions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, filters.timeframe, filters.difficulty, filters.topics]);
+  }, [companyId, filters.timeframe, filters.difficulty, JSON.stringify(filters.topics)]);
 
   // Refresh questions when navigating back from FocusMode
   useEffect(() => {
@@ -227,29 +227,40 @@ function QuestionList() {
   //   // eslint-disable-next-line react-hooks/exhaustive-deps
   // }, [companyId, isAuthenticated]);
 
-  // Filter questions by active month
+  // Filter questions by active month and search term
   useEffect(() => {
     if (allQuestions.length === 0) {
       setDisplayedQuestions([]);
       return;
     }
     
-    // If no activeMonth is selected, show all questions
-    if (!activeMonth) {
-      // Show all questions sorted by frequency
-      const sorted = [...allQuestions].sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
-      setDisplayedQuestions(sorted);
-      return;
+    let filtered = [...allQuestions];
+    
+    // Filter by active month if selected
+    if (activeMonth) {
+      filtered = filtered.filter(q => format(new Date(q.updated_at), 'MMM yy') === activeMonth);
     }
     
-    // Filter questions by the selected update month
-    // This shows which questions were updated/imported in that specific populate run
-    const filtered = allQuestions
-      .filter(q => format(new Date(q.updated_at), 'MMM yy') === activeMonth)
-      .sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
+    // Filter by search term if provided
+    if (filters.search && filters.search.trim()) {
+      const searchLower = filters.search.toLowerCase().trim();
+      filtered = filtered.filter(q => {
+        // Search in title, topics, and difficulty
+        const titleMatch = q.title?.toLowerCase().includes(searchLower);
+        const topicsMatch = q.topics?.toLowerCase().includes(searchLower);
+        const difficultyMatch = q.difficulty?.toLowerCase().includes(searchLower);
+        const idMatch = q.id?.toString().toLowerCase().includes(searchLower);
+        const numberMatch = q.number?.toString().includes(searchLower);
+        
+        return titleMatch || topicsMatch || difficultyMatch || idMatch || numberMatch;
+      });
+    }
+    
+    // Sort by frequency
+    filtered.sort((a, b) => (b.frequency || 0) - (a.frequency || 0));
     
     setDisplayedQuestions(filtered);
-  }, [allQuestions, activeMonth]);
+  }, [allQuestions, activeMonth, filters.search]);
 
   // Fetch available topics
   useEffect(() => {
@@ -522,7 +533,7 @@ function QuestionList() {
   const solvedCount = displayedQuestions.filter(q => q.solved).length;
 
   return (
-    <div className="min-h-screen bg-black-base">
+    <div className="min-h-screen bg-black-base overflow-x-hidden w-full">
       {/* Question Action Modal */}
       <QuestionActionModal
         question={actionModalQuestion}
@@ -531,49 +542,52 @@ function QuestionList() {
         onAction={handleQuestionAction}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8 w-full overflow-x-hidden">
         {/* Compact Header */}
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mb-[var(--space-4)]"
+          className="mb-3 sm:mb-4"
         >
           <button
             onClick={() => navigate('/companies')}
-            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors mb-[var(--space-2)] text-sm block"
+            className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors mb-2 text-xs sm:text-sm block"
           >
             ← Back to Companies
           </button>
           
-          <div className="flex items-center justify-between gap-[var(--space-4)] flex-wrap">
-            <div className="flex items-center gap-[var(--space-4)] flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-wrap">
               {/* Company Name */}
-              <div className="flex items-center gap-[var(--space-3)]">
-                <h1 className="text-2xl font-semibold text-[var(--text-primary)]">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <h1 className="text-xl sm:text-2xl font-semibold text-[var(--text-primary)]">
                   {company?.name || company?.id || 'Company Questions'}
                 </h1>
                 {company?.question_count !== undefined && (
-                  <span className="text-sm text-[var(--text-secondary)]">
+                  <span className="text-xs sm:text-sm text-[var(--text-secondary)]">
                     {company.question_count} questions
                   </span>
                 )}
               </div>
 
-              {/* Updated Section */}
+              {/* Updated Section - Scrollable on mobile */}
               {updateMonths.length > 0 && (
-                <div className="flex items-center gap-[var(--space-2)]">
-                  <span className="text-[var(--text-tertiary)] text-xs font-medium">Updated:</span>
-                  {updateMonths.map((month, index) => (
-                    <Button
-                      key={month}
-                      variant={activeMonth === month ? 'primary' : 'secondary'}
-                      size="sm"
-                      onClick={() => setActiveMonth(month)}
-                    >
-                      {index === 0 ? 'Latest' : month}
-                    </Button>
-                  ))}
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-[var(--text-tertiary)] text-xs font-medium flex-shrink-0">Updated:</span>
+                  <div className="flex items-center gap-2 overflow-x-auto flex-1 sm:flex-initial pb-1 sm:pb-0 scrollbar-thin">
+                    {updateMonths.map((month, index) => (
+                      <Button
+                        key={month}
+                        variant={activeMonth === month ? 'primary' : 'secondary'}
+                        size="sm"
+                        onClick={() => setActiveMonth(month)}
+                        className="text-xs flex-shrink-0"
+                      >
+                        {index === 0 ? 'Latest' : month}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -581,10 +595,10 @@ function QuestionList() {
             {/* Populate Button - Right Aligned */}
             <Button
               variant="warning"
-              size="md"
+              size="sm"
               onClick={handlePopulate}
               disabled={isPopulating}
-              className="font-semibold"
+              className="font-semibold w-full sm:w-auto"
             >
               {isPopulating ? 'Populating...' : 'Populate'}
             </Button>
@@ -596,10 +610,10 @@ function QuestionList() {
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="sticky top-0 z-10 bg-[var(--bg-base)]/95 backdrop-blur-sm border-b border-[var(--border-subtle)] py-[var(--space-3)] mb-[var(--space-4)]"
+          className="sticky top-0 z-10 bg-[var(--bg-base)]/95 backdrop-blur-sm border-b border-[var(--border-subtle)] py-2 sm:py-3 mb-3 sm:mb-4"
         >
           {/* Compact Filter Row - Left Aligned */}
-          <div className="flex items-center gap-[var(--space-4)] flex-wrap">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
             {/* Filters - Left Aligned */}
             <div className="flex-1 min-w-0">
               <QuestionFilters
@@ -616,7 +630,7 @@ function QuestionList() {
                 variant="primary"
                 size="sm"
                 onClick={handleGetRandom}
-                className="font-semibold"
+                className="font-semibold w-full sm:w-auto"
               >
                 🎲 Random Question
               </Button>
@@ -630,29 +644,30 @@ function QuestionList() {
             initial={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="mb-[var(--space-4)]"
+            className="mb-3 sm:mb-4"
           >
-            <Card className="p-[var(--space-4)] bg-gradient-to-r from-[var(--accent-primary-light)] to-[var(--accent-secondary)]/10 border-[var(--border-brand)]">
-              <div className="flex items-start justify-between mb-[var(--space-3)]">
-                <div>
-                  <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-[var(--space-1)]">
+            <Card className="p-3 sm:p-4 bg-gradient-to-r from-[var(--accent-primary-light)] to-[var(--accent-secondary)]/10 border-[var(--border-brand)]">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] mb-1 sm:mb-2">
                     🎲 Random Question
                   </h3>
-                  <p className="text-base text-[var(--text-secondary)]">{randomQuestion.title}</p>
+                  <p className="text-sm sm:text-base text-[var(--text-secondary)] break-words">{randomQuestion.title}</p>
                 </div>
                 <button
                   onClick={() => setRandomQuestion(null)}
-                  className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors p-[var(--space-1)] rounded-[var(--radius-sm)] hover:bg-[var(--bg-surface-2)]"
+                  className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors p-1 rounded-[var(--radius-sm)] hover:bg-[var(--bg-surface-2)] self-start sm:self-auto"
                   aria-label="Close random question"
                 >
                   ✕
                 </button>
               </div>
-              <div className="flex gap-[var(--space-2)]">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button
                   variant="primary"
                   size="sm"
                   onClick={() => handleQuestionClick(randomQuestion)}
+                  className="w-full sm:w-auto"
                 >
                   Solve
                 </Button>
@@ -661,6 +676,7 @@ function QuestionList() {
                     variant="secondary"
                     size="sm"
                     onClick={() => handleMarkSolved(randomQuestion.id, false)}
+                    className="w-full sm:w-auto"
                   >
                     Mark Unsolved
                   </Button>
@@ -676,9 +692,9 @@ function QuestionList() {
             initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
-            className="flex items-center justify-between mb-6"
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6"
           >
-            <div className="text-[var(--text-secondary)] text-sm">
+            <div className="text-[var(--text-secondary)] text-xs sm:text-sm">
               Solved <span className="font-semibold text-[var(--accent-success)]">{solvedCount}</span> out of{' '}
               <span className="font-semibold text-[var(--accent-primary)]">{displayedQuestions.length}</span>
             </div>
@@ -686,7 +702,7 @@ function QuestionList() {
               variant="ghost"
               size="sm"
               onClick={handleResetProgress}
-              className="text-[var(--accent-danger)] hover:text-[var(--accent-danger-hover)]"
+              className="text-[var(--accent-danger)] hover:text-[var(--accent-danger-hover)] w-full sm:w-auto"
             >
               Reset Progress
             </Button>
@@ -699,15 +715,16 @@ function QuestionList() {
             initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
-            className="mb-[var(--space-4)] p-[var(--space-3)] bg-[var(--accent-primary-light)] border border-[var(--border-brand)] rounded-[var(--radius-md)]"
+            className="mb-3 sm:mb-4 p-3 bg-[var(--accent-primary-light)] border border-[var(--border-brand)] rounded-[var(--radius-md)]"
           >
-            <p className="text-[var(--accent-primary)] text-sm mb-[var(--space-2)]">
+            <p className="text-[var(--accent-primary)] text-xs sm:text-sm mb-2">
               💡 Sign up to track your progress and unlock personalized features!
             </p>
             <Button
               variant="primary"
               size="sm"
               onClick={() => navigate('/login')}
+              className="w-full sm:w-auto"
             >
               Sign Up / Login
             </Button>
@@ -756,11 +773,11 @@ function QuestionList() {
 
         {/* View Toggle */}
         {!isLoading && displayedQuestions.length > 0 && (
-          <div className="flex items-center justify-end gap-2 mb-4">
-            <div className="flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] p-1">
+          <div className="flex items-center justify-end gap-2 mb-3 sm:mb-4">
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-[var(--radius-md)] p-0.5 sm:p-1">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-all duration-[var(--duration-fast)] ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-[var(--radius-sm)] transition-all duration-[var(--duration-fast)] ${
                   viewMode === 'list'
                     ? 'bg-[var(--accent-primary)] text-white shadow-[var(--elevation-1)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]'
@@ -771,7 +788,7 @@ function QuestionList() {
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-[var(--radius-sm)] transition-all duration-[var(--duration-fast)] ${
+                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-[var(--radius-sm)] transition-all duration-[var(--duration-fast)] ${
                   viewMode === 'grid'
                     ? 'bg-[var(--accent-primary)] text-white shadow-[var(--elevation-1)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)]'
@@ -848,7 +865,7 @@ function QuestionList() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6"
               >
                 {displayedQuestions.map((question, index) => (
                   <motion.div

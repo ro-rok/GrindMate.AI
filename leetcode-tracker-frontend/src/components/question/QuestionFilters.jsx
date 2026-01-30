@@ -115,13 +115,13 @@ const QuestionFilters = ({
     onChange({ ...filters, topics: filters.topics.filter(t => t !== topic) });
   };
 
-  // Filter topic suggestions
+  // Filter topic suggestions - show more topics with better scrolling
   const topicSuggestions = availableTopics
     .filter(topic => 
       topic.toLowerCase().includes(topicInput.toLowerCase()) &&
       !filters.topics.includes(topic)
     )
-    .slice(0, 10);
+    .slice(0, 50); // Show up to 50 topics instead of 10
 
   // Handle clear all filters
   const handleClearFilters = () => {
@@ -138,19 +138,19 @@ const QuestionFilters = ({
   const hasActiveFilters = filters.difficulty || filters.topics.length > 0 || filters.search;
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-3 sm:space-y-4 ${className}`}>
       {/* Top row: Search and Sort */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
         {/* Search input */}
         <div className="flex-1 relative">
           <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary" />
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary text-sm" />
             <Input
               type="text"
               placeholder="Search questions..."
               value={searchInput}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 pr-10"
+              className="pl-9 sm:pl-10 pr-9 sm:pr-10 text-sm"
             />
             {searchInput && (
               <button
@@ -164,11 +164,11 @@ const QuestionFilters = ({
         </div>
 
         {/* Sort dropdown */}
-        <div className="sm:w-48">
+        <div className="w-full sm:w-40 md:w-48">
           <select
             value={filters.sort}
             onChange={handleSortChange}
-            className="w-full px-4 py-2 bg-black-elevated text-text-primary border border-border-subtle rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary"
+            className="w-full px-3 sm:px-4 py-2 bg-black-elevated text-text-primary border border-border-subtle rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-primary text-sm"
           >
             {sortOptions.map(option => (
               <option key={option.value} value={option.value}>
@@ -180,14 +180,15 @@ const QuestionFilters = ({
       </div>
 
       {/* Second row: Timeframe buttons */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-text-tertiary text-sm font-medium">Timeframe:</span>
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
+        <span className="text-[var(--text-secondary)] text-xs sm:text-sm font-medium">Timeframe:</span>
         {timeframes.map(({ value, label }) => (
           <Button
             key={value}
             variant={filters.timeframe === value ? 'primary' : 'secondary'}
             size="sm"
             onClick={() => handleTimeframeChange(value)}
+            className="text-xs"
           >
             {label}
           </Button>
@@ -195,15 +196,15 @@ const QuestionFilters = ({
       </div>
 
       {/* Third row: Difficulty buttons */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-text-tertiary text-sm font-medium">Difficulty:</span>
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 items-center">
+        <span className="text-[var(--text-secondary)] text-xs sm:text-sm font-medium">Difficulty:</span>
         {difficulties.map(difficulty => (
           <Button
             key={difficulty}
             variant={filters.difficulty === difficulty ? Badge.getDifficultyVariant(difficulty) : 'secondary'}
             size="sm"
             onClick={() => handleDifficultyChange(difficulty)}
-            className={filters.difficulty === difficulty ? 'ring-2 ring-offset-2 ring-offset-black-base' : ''}
+            className={`text-xs ${filters.difficulty === difficulty ? 'ring-2 ring-offset-2 ring-offset-black-base' : ''}`}
           >
             {difficulty}
           </Button>
@@ -212,8 +213,8 @@ const QuestionFilters = ({
 
       {/* Fourth row: Topics multi-select */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-text-tertiary text-sm font-medium">Topics:</span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <span className="text-[var(--text-secondary)] text-xs sm:text-sm font-medium">Topics:</span>
           <div className="flex-1 relative">
             <Input
               ref={topicInputRef}
@@ -234,12 +235,12 @@ const QuestionFilters = ({
             
             {/* Topic suggestions dropdown */}
             {showTopicSuggestions && topicSuggestions.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-black-elevated border border-border-subtle rounded-lg shadow-xl max-h-48 overflow-y-auto">
+              <div className="absolute z-20 w-full mt-1 bg-[var(--bg-surface)] border border-[var(--border-default)] rounded-lg shadow-xl max-h-48 sm:max-h-64 overflow-y-auto">
                 {topicSuggestions.map(topic => (
                   <button
                     key={topic}
                     onClick={() => handleTopicAdd(topic)}
-                    className="w-full px-3 py-2 text-left text-sm text-text-primary hover:bg-black-elevated-hover transition-colors"
+                    className="w-full px-3 py-2 text-left text-xs sm:text-sm text-[var(--text-primary)] hover:bg-[var(--bg-surface-2)] transition-colors border-b border-[var(--border-subtle)] last:border-b-0"
                   >
                     {topic}
                   </button>
@@ -251,26 +252,34 @@ const QuestionFilters = ({
 
         {/* Selected topics */}
         {filters.topics.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 sm:pl-[4.5rem]">
             {filters.topics.map(topic => (
-              <Badge
+              <div
                 key={topic}
-                variant="primary"
-                className="flex items-center gap-1 cursor-pointer hover:opacity-80"
-                onClick={() => handleTopicRemove(topic)}
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-[var(--accent-primary)] text-white rounded-[var(--radius-md)] border-0"
               >
-                {topic}
-                <FaTimes className="text-xs" />
-              </Badge>
+                <span className="font-medium text-xs sm:text-sm">{topic}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTopicRemove(topic);
+                  }}
+                  className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                  aria-label={`Remove ${topic}`}
+                  type="button"
+                >
+                  <FaTimes className="text-xs" />
+                </button>
+              </div>
             ))}
           </div>
         )}
       </div>
 
       {/* Bottom row: Question count, random question, and clear filters */}
-      <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
-        <div className="text-text-secondary text-sm">
-          <span className="font-semibold text-text-primary">{questionCount}</span> questions
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-border-subtle">
+        <div className="text-[var(--text-secondary)] text-xs sm:text-sm">
+          <span className="font-semibold text-[var(--text-primary)]">{questionCount}</span> questions
         </div>
         
         <div className="flex items-center gap-2">
@@ -279,7 +288,7 @@ const QuestionFilters = ({
               variant="ghost"
               size="sm"
               onClick={handleClearFilters}
-              className="text-text-tertiary hover:text-text-primary"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] text-xs sm:text-sm"
             >
               Clear filters
             </Button>
