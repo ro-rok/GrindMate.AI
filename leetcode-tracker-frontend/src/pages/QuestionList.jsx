@@ -12,6 +12,7 @@ import QuestionListView from '../components/question/QuestionListView';
 import QuestionActionModal from '../components/question/QuestionActionModal';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
 import Skeleton from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -652,7 +653,49 @@ function QuestionList() {
                   <h3 className="text-base sm:text-lg font-semibold text-[var(--text-primary)] mb-1 sm:mb-2">
                     🎲 Random Question
                   </h3>
-                  <p className="text-sm sm:text-base text-[var(--text-secondary)] break-words">{randomQuestion.title}</p>
+                  <p className="text-sm sm:text-base text-[var(--text-secondary)] break-words mb-2">{randomQuestion.title}</p>
+                  
+                  {/* Question metadata */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Difficulty */}
+                    <Badge 
+                      variant={Badge.getDifficultyVariant(randomQuestion.difficulty)} 
+                      size="sm"
+                    >
+                      {randomQuestion.difficulty || 'Medium'}
+                    </Badge>
+                    
+                    {/* Topics */}
+                    {randomQuestion.topics && randomQuestion.topics.split(',').slice(0, 3).map((topic, idx) => (
+                      <Badge key={idx} variant="default" size="sm">
+                        {topic.trim()}
+                      </Badge>
+                    ))}
+                    
+                    {/* Acceptance Rate */}
+                    {randomQuestion.acceptance_rate && (
+                      <div className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                        <span className="font-medium text-[var(--text-tertiary)] uppercase">AC</span>
+                        <span className="font-semibold">{Math.round(randomQuestion.acceptance_rate * 100)}%</span>
+                      </div>
+                    )}
+                    
+                    {/* Frequency */}
+                    {randomQuestion.frequency > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                        <span className="font-medium text-[var(--text-tertiary)] uppercase">Freq</span>
+                        <div className="flex items-center gap-1">
+                          <div className="w-12 h-1.5 bg-[var(--bg-surface-2)] rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-[var(--accent-primary)] rounded-full"
+                              style={{ width: `${Math.min((randomQuestion.frequency / 100) * 100, 100)}%` }}
+                            />
+                          </div>
+                          <span className="font-medium">{randomQuestion.frequency}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setRandomQuestion(null)}
