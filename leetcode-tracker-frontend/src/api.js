@@ -13,20 +13,72 @@ const api = axios.create({
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop().split(';').shift();
+  if (parts.length === 2) {
+    const cookieValue = parts.pop().split(';').shift();
+    console.log(`[CSRF Debug] getCookie('${name}') = '${cookieValue}'`);
+    return cookieValue;
+  }
+  console.log(`[CSRF Debug] getCookie('${name}') = null (not found in cookies: ${document.cookie})`);
+  return null;
+}
+
+// Helper function to fetch CSRF token from server if not available locally
+async function ensureCSRFToken() {
+  // Check localStorage first
+  let csrfToken = localStorage.getItem('csrf_token');
+  if (csrfToken) {
+    return csrfToken;
+  }
+  
+  // Try to read from cookie
+  csrfToken = getCookie('csrf_token');
+  if (csrfToken) {
+    // Store in localStorage for future use
+    localStorage.setItem('csrf_token', csrfToken);
+    return csrfToken;
+  }
+  
+  // Fetch from server as last resort
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_API_URL}/csrf-token`,
+      {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      }
+    );
+    
+    if (response.data?.csrf_token) {
+      localStorage.setItem('csrf_token', response.data.csrf_token);
+      console.log('[CSRF Debug] Fetched CSRF token from server');
+      return response.data.csrf_token;
+    }
+  } catch (error) {
+    console.error('[CSRF Debug] Failed to fetch CSRF token from server:', error);
+  }
+  
   return null;
 }
 
 // Add request interceptor to include CSRF token
 api.interceptors.request.use(
-  config => {
+  async config => {
     // Add CSRF token to state-changing requests
     const protectedMethods = ['POST', 'PUT', 'DELETE', 'PATCH'];
     if (protectedMethods.includes(config.method?.toUpperCase())) {
-      // Try to get CSRF token from cookie first, then fall back to localStorage
-      const csrfToken = getCookie('csrf_token') || localStorage.getItem('csrf_token');
+      // Ensure we have a CSRF token
+      const csrfToken = await ensureCSRFToken();
+      console.log(`[CSRF Debug] Request ${config.method} ${config.url} - CSRF token: ${csrfToken ? 'present' : 'missing'}`);
       if (csrfToken) {
         config.headers['X-CSRF-Token'] = csrfToken;
+        console.log(`[CSRF Debug] Added X-CSRF-Token header: ${csrfToken.substring(0, 10)}...`);
+      } else {
+        console.warn(`[CSRF Debug] No CSRF token found for ${config.method} ${config.url}`);
+        console.warn(`[CSRF Debug] document.cookie = '${document.cookie}'`);
+        console.warn(`[CSRF Debug] localStorage.csrf_token = '${localStorage.getItem('csrf_token')}'`);
       }
     }
     return config;
@@ -44,12 +96,21 @@ api.interceptors.response.use(
       localStorage.setItem('currentUser', JSON.stringify(response.data));
       if (response.data.csrf_token) {
         localStorage.setItem('csrf_token', response.data.csrf_token);
+        console.log('[CSRF Debug] Stored CSRF token from login response');
       }
     }
     // If this is a register response, store CSRF token
     if (response.config.url.includes('/users.json') && response.status === 201) {
       if (response.data.csrf_token) {
         localStorage.setItem('csrf_token', response.data.csrf_token);
+        console.log('[CSRF Debug] Stored CSRF token from register response');
+      }
+    }
+    // If this is a refresh response, store CSRF token if present
+    if (response.config.url.includes('/auth/refresh') && response.status === 200) {
+      if (response.data.csrf_token) {
+        localStorage.setItem('csrf_token', response.data.csrf_token);
+        console.log('[CSRF Debug] Stored CSRF token from refresh response');
       }
     }
     return response;

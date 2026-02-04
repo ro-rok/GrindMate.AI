@@ -315,6 +315,27 @@ async def refresh_token(
     }
 
 
+@router.get("/csrf-token")
+async def get_csrf_token(
+    request: Request,
+    current_user: CurrentUser,
+):
+    """
+    Get current CSRF token from cookie.
+    Useful when frontend loses token from localStorage.
+    """
+    settings = get_settings()
+    csrf_token = request.cookies.get(settings.csrf_token_cookie_name)
+    
+    if not csrf_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="CSRF token not found. Please log in again."
+        )
+    
+    return {"csrf_token": csrf_token}
+
+
 @router.delete("/users/sign_out", status_code=status.HTTP_204_NO_CONTENT)
 @router.delete("/users/sign_out.json", status_code=status.HTTP_204_NO_CONTENT)
 async def logout_user(

@@ -29,9 +29,9 @@ function QuestionRow({
 
   const difficultyVariant = Badge.getDifficultyVariant(question.difficulty);
   const topics = question.topics ? question.topics.split(',').map(t => t.trim()).filter(Boolean) : [];
-  const maxTopics = 5; // Show more topics
+  const maxTopics = 3; // Show up to 3 topics on desktop
   const frequency = question.frequency || 0;
-  const maxFrequency = 100; // Normalize frequency display
+  const acceptanceRate = question.acceptance_rate ? Math.round(question.acceptance_rate * 100) : null;
 
   const MotionRow = prefersReducedMotion ? 'div' : motion.div;
 
@@ -39,7 +39,7 @@ function QuestionRow({
     <MotionRow
       layoutId={layoutId}
       className={`
-        group flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2
+        group flex items-center gap-1 sm:gap-2 md:gap-3 px-2 sm:px-3 py-2
         bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[var(--radius-md)]
         hover:border-[var(--border-default)] hover:bg-[var(--bg-surface-2)] 
         transition-all duration-[var(--duration-fast)]
@@ -71,19 +71,69 @@ function QuestionRow({
         )}
       </div>
 
-      {/* Title - Takes most space */}
-      <div className="flex-1 min-w-0 overflow-hidden pr-1">
+      {/* Title - Takes most space on mobile, fixed width on desktop */}
+      <div className="flex-1 md:flex-initial md:w-64 lg:w-80 min-w-0 overflow-hidden pr-1">
         <h3 className="text-[11px] sm:text-sm font-semibold text-[var(--text-primary)] truncate leading-tight group-hover:text-[var(--accent-primary)] transition-colors">
           {question.title}
         </h3>
       </div>
 
-      {/* Difficulty Badge - Hide on very small screens */}
-      <div className="hidden xs:block flex-shrink-0">
-        <Badge variant={difficultyVariant} size="sm" className="text-[9px] sm:text-xs whitespace-nowrap px-1 sm:px-2 py-0.5">
-          {question.difficulty?.charAt(0) || 'M'}
+      {/* Topics - Desktop only */}
+      <div className="hidden md:flex flex-1 min-w-0 items-center gap-1.5 overflow-hidden">
+        {topics.slice(0, maxTopics).map((topic, idx) => (
+          <Badge 
+            key={idx} 
+            variant="secondary" 
+            size="sm" 
+            className="text-[10px] whitespace-nowrap px-2 py-0.5 flex-shrink-0"
+          >
+            {topic}
+          </Badge>
+        ))}
+        {topics.length > maxTopics && (
+          <Tooltip content={topics.slice(maxTopics).join(', ')}>
+            <span className="text-[10px] text-[var(--text-tertiary)] flex-shrink-0">
+              +{topics.length - maxTopics}
+            </span>
+          </Tooltip>
+        )}
+      </div>
+
+      {/* Difficulty Badge - Always visible with full text on desktop, abbreviated on mobile */}
+      <div className="flex-shrink-0">
+        <Badge variant={difficultyVariant} size="sm" className="text-[9px] sm:text-xs whitespace-nowrap px-1.5 sm:px-2 py-0.5">
+          <span className="hidden sm:inline">{question.difficulty || 'Medium'}</span>
+          <span className="sm:hidden">{question.difficulty?.charAt(0) || 'M'}</span>
         </Badge>
       </div>
+
+      {/* Acceptance Rate - Desktop only */}
+      {acceptanceRate !== null && (
+        <div className="hidden md:flex flex-shrink-0 items-center gap-1.5 min-w-[70px]">
+          <span className="text-[10px] text-[var(--text-tertiary)] font-medium uppercase">AC</span>
+          <span className="text-xs text-[var(--text-secondary)] font-semibold">
+            {acceptanceRate}%
+          </span>
+        </div>
+      )}
+
+      {/* Frequency - Desktop only */}
+      {frequency > 0 && (
+        <div className="hidden md:flex flex-shrink-0 items-center gap-1.5 min-w-[80px]">
+          <span className="text-[10px] text-[var(--text-tertiary)] font-medium uppercase">Freq</span>
+          <div className="flex items-center gap-1">
+            <div className="w-10 h-1.5 bg-[var(--bg-surface-2)] rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-[var(--accent-primary)] rounded-full transition-all"
+                style={{ width: `${Math.min((frequency / 100) * 100, 100)}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-[var(--text-tertiary)] font-medium">
+              {frequency}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Action Button - Only mark solved, always visible */}
       {onMarkSolved && (

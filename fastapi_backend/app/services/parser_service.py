@@ -356,6 +356,7 @@ class ParserService:
         """
         Extract questions array from parsed data.
         Looks for data.favoriteQuestionList.questions path.
+        Also handles direct arrays (for company GraphQL queries).
         
         Args:
             data: Parsed data structure
@@ -363,6 +364,10 @@ class ParserService:
         Returns:
             Questions array or None if not found
         """
+        # Handle direct array (company GraphQL queries return arrays directly)
+        if isinstance(data, list):
+            return data
+        
         if not isinstance(data, dict):
             return None
         
