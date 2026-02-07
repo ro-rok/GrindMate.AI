@@ -9,28 +9,16 @@ const api = axios.create({
   }
 });
 
-// Helper function to get cookie value
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    const cookieValue = parts.pop().split(';').shift();
-    console.log(`[CSRF Debug] getCookie('${name}') = '${cookieValue}'`);
-    return cookieValue;
-  }
-  console.log(`[CSRF Debug] getCookie('${name}') = null (not found in cookies: ${document.cookie})`);
-  return null;
-}
-
-// Helper function to get CSRF token - ALWAYS read from cookie
-// The server validates that the header matches the cookie, so we must use the cookie value
+// Helper function to get CSRF token
+// The server returns the CSRF token in the response body (login/register/refresh)
+// and also sets it as a cookie. Due to cross-origin restrictions, we store it in
+// localStorage and send it in the X-CSRF-Token header. The server validates that
+// the header matches the cookie (which is sent automatically with credentials).
 function getCSRFToken() {
-  // ALWAYS read from cookie - this is the source of truth
-  const csrfToken = getCookie('csrf_token');
+  const csrfToken = localStorage.getItem('csrf_token');
   
   if (!csrfToken) {
-    console.warn('[CSRF Debug] No CSRF token found in cookies');
-    console.warn('[CSRF Debug] document.cookie =', document.cookie);
+    console.warn('[CSRF Debug] No CSRF token found in localStorage');
   }
   
   return csrfToken;
@@ -63,18 +51,27 @@ api.interceptors.request.use(
 // Add response interceptor for authentication state
 api.interceptors.response.use(
   response => {
-    // If this is a login response, store the user data
+    // If this is a login response, store the user data and CSRF token
     if (response.config.url.includes('/users/sign_in') && response.status === 200) {
       localStorage.setItem('currentUser', JSON.stringify(response.data));
-      console.log('[CSRF Debug] Login successful - CSRF token should be in cookie');
+      if (response.data.csrf_token) {
+        localStorage.setItem('csrf_token', response.data.csrf_token);
+        console.log('[CSRF Debug] Stored CSRF token from login response');
+      }
     }
-    // If this is a register response, log success
+    // If this is a register response, store CSRF token
     if (response.config.url.includes('/users.json') && response.status === 201) {
-      console.log('[CSRF Debug] Registration successful - CSRF token should be in cookie');
+      if (response.data.csrf_token) {
+        localStorage.setItem('csrf_token', response.data.csrf_token);
+        console.log('[CSRF Debug] Stored CSRF token from register response');
+      }
     }
-    // If this is a refresh response, log success
+    // If this is a refresh response, store CSRF token if present
     if (response.config.url.includes('/auth/refresh') && response.status === 200) {
-      console.log('[CSRF Debug] Token refresh successful - CSRF token should be in cookie');
+      if (response.data.csrf_token) {
+        localStorage.setItem('csrf_token', response.data.csrf_token);
+        console.log('[CSRF Debug] Stored CSRF token from refresh response');
+      }
     }
     return response;
   }, 
@@ -106,6 +103,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed - clear auth state
         localStorage.removeItem('currentUser');
+        localStorage.removeItem('csrf_token');
         
         // Update auth store to reflect logged out state
         import('./store/authStore').then(module => {
@@ -123,6 +121,7 @@ api.interceptors.response.use(
     // For other 401 errors or if refresh failed, clear auth state
     if (error.response?.status === 401) {
       localStorage.removeItem('currentUser');
+      localStorage.removeItem('csrf_token');
       
       // Update auth store to reflect logged out state
       import('./store/authStore').then(module => {
