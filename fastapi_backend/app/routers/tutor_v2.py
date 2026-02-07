@@ -163,8 +163,6 @@ async def chat_with_tutor(
     - HTTP 403: Authorization failure
     - HTTP 429: Rate limit exceeded
     """
-    print(f"DEBUG: /tutor/chat endpoint called with question_id={request.question_id}, tutor_mode={request.tutor_mode}")
-    # Create service instance
     tutor_service = TutorService(db)
 
     # Validate required fields (Requirement 13.1)
@@ -236,9 +234,8 @@ async def chat_with_tutor(
     
     except ValueError as e:
         # Question not found or content unavailable
-        import traceback
-        print(f"ValueError in /tutor/chat: {str(e)}")
-        print(traceback.format_exc())
+        logger = logging.getLogger("uvicorn")
+        logger.error(f"ValueError in /tutor/chat: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
@@ -252,8 +249,8 @@ async def chat_with_tutor(
         import traceback
         
         if isinstance(e, ValidationError):
-            print(f"ValidationError in /tutor/chat: {str(e)}")
-            print(traceback.format_exc())
+            logger = logging.getLogger("uvicorn")
+            logger.error(f"ValidationError in /tutor/chat: {str(e)}")
             # This shouldn't happen with from_result, but handle it gracefully
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -262,9 +259,8 @@ async def chat_with_tutor(
                 }
             )
         # Internal server error - log the full traceback for debugging
-        import traceback
-        print(f"ERROR in /tutor/chat: {str(e)}")
-        print(traceback.format_exc())
+        logger = logging.getLogger("uvicorn")
+        logger.error(f"ERROR in /tutor/chat: {str(e)}", exc_info=True)
         
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -335,10 +331,8 @@ async def initialize_session(
         )
         
     except Exception as e:
-        import traceback
-        error_traceback = traceback.format_exc()
-        print(f"ERROR in /tutor/session/initialize: {str(e)}")
-        print(error_traceback)
+        logger = logging.getLogger("uvicorn")
+        logger.error(f"ERROR in /tutor/session/initialize: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={

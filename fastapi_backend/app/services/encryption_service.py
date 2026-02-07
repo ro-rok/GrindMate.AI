@@ -47,12 +47,13 @@ class EncryptionService:
                 Fernet(key_bytes)
                 return key_bytes
             except Exception:
-                print("Warning: Invalid ENCRYPTION_KEY in environment, generating new key")
+                logger = logging.getLogger("uvicorn")
+                logger.warning("Invalid ENCRYPTION_KEY in environment, generating new key")
         
         # Generate a new key for development
         # WARNING: This means encrypted data won't persist across restarts in dev
-        print("Warning: No ENCRYPTION_KEY found, generating temporary key")
-        print("Set ENCRYPTION_KEY environment variable for production")
+        logger = logging.getLogger("uvicorn")
+        logger.warning("No ENCRYPTION_KEY found, generating temporary key. Set ENCRYPTION_KEY environment variable for production")
         return Fernet.generate_key()
     
     def encrypt(self, plaintext: str) -> str:
@@ -88,10 +89,12 @@ class EncryptionService:
             decrypted_bytes = self.fernet.decrypt(encrypted.encode())
             return decrypted_bytes.decode()
         except InvalidToken:
-            print("Warning: Failed to decrypt data (invalid token or wrong key)")
+            logger = logging.getLogger("uvicorn")
+            logger.warning("Failed to decrypt data (invalid token or wrong key)")
             return None
         except Exception as e:
-            print(f"Warning: Failed to decrypt data: {e}")
+            logger = logging.getLogger("uvicorn")
+            logger.warning(f"Failed to decrypt data: {e}")
             return None
     
     def encrypt_api_key(self, api_key: str) -> str:

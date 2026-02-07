@@ -222,7 +222,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         
         except Exception as e:
             # Don't fail request if header addition fails
-            print(f"Error adding rate budget headers: {e}")
+            logger = logging.getLogger("uvicorn")
+            logger.debug(f"Error adding rate budget headers: {e}")
     
     def _cleanup_old_ips(self) -> None:
         """Remove IPs with no recent requests"""

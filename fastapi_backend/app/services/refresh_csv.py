@@ -1,6 +1,7 @@
 import csv
 import urllib.parse
 import re
+import logging
 from datetime import datetime
 
 import httpx
@@ -8,6 +9,8 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ..db import get_database
+
+logger = logging.getLogger("uvicorn")
 
 
 RAW_BASE = "https://raw.githubusercontent.com/liquidslr/leetcode-company-wise-problems/main"
@@ -44,11 +47,11 @@ async def refresh_company_questions(company_id: str):
     db: AsyncIOMotorDatabase = get_database()
     company = await db["companies"].find_one({"_id": ObjectId(company_id)})
     if not company:
-        print(f"[Importer] ⚠️  Company {company_id} not found")
+        logger.warning(f"Company {company_id} not found")
         return
 
     company_name = company.get("name", "")
-    print(f"[Importer] 🚀 Starting import for {company_name}")
+    logger.info(f"Starting import for {company_name}")
 
     # Track all question links found in this import (per timeframe)
     # Key: timeframe, Value: set of links
@@ -60,21 +63,21 @@ async def refresh_company_questions(company_id: str):
             folder = urllib.parse.quote(company_name, safe="")
             file_name = urllib.parse.quote(fname, safe="")
             url = f"{RAW_BASE}/{folder}/{file_name}"
-            print(f"[Importer] 📥 Fetching {timeframe} → {url}")
+            logger.info(f"Fetching {timeframe} from GitHub")
 
             new_links_by_timeframe[timeframe] = set()
 
             try:
                 resp = await client.get(url, timeout=60.0)
                 if resp.status_code == 404:
-                    print(f"[Importer] ⚠️  {fname} not found (HTTP 404)")
+                    logger.warning(f"{fname} not found (HTTP 404)")
                     continue
                 resp.raise_for_status()
             except httpx.HTTPError as e:
-                print(f"[Importer] ⚠️  Error fetching {fname}: {e}")
+                logger.error(f"Error fetching {fname}: {e}")
                 continue
             except Exception as e:
-                print(f"[Importer] ⚠️  Unexpected error fetching {fname}: {e}")
+                logger.error(f"Unexpected error fetching {fname}: {e}")
                 continue
 
             csv_text = resp.text
@@ -87,7 +90,7 @@ async def refresh_company_questions(company_id: str):
                     continue
                 
                 new_links_by_timeframe[timeframe].add(link)
-                print(f"[Importer]   ➡️  Row: {title}")
+                logger.debug(f"Processing: {title}")
 
                 # Check if question already exists for this company and timeframe
                 existing = await db["questions"].find_one(
@@ -151,14 +154,14 @@ async def refresh_company_questions(company_id: str):
                         {"_id": existing["_id"]},
                         {"$set": update_doc}
                     )
-                    print(f"[Importer]      ✔️  Updated Q#{existing['_id']}")
+                    logger.debug(f"Updated question: {title}")
                 else:
                     # Insert new question
                     if "legacy_id" in company:
                         update_doc["company_legacy_id"] = company["legacy_id"]
                     update_doc["created_at"] = now
                     result = await db["questions"].insert_one(update_doc)
-                    print(f"[Importer]      ✔️  Saved Q#{result.inserted_id}")
+                    logger.info(f"Added new question: {title}")
 
     # Mark questions as removed if they're no longer in the CSV for their timeframe
     # This preserves the questions and user progress, just marks them as removed
@@ -185,9 +188,9 @@ async def refresh_company_questions(company_id: str):
                         {"_id": q["_id"]},
                         {"$set": {"metadata": metadata}},
                     )
-                    print(f"[Importer]      🗑️  Marked removed: {q.get('title')} ({timeframe})")
+                    logger.info(f"Marked as removed: {q.get('title')} ({timeframe})")
 
-    print(f"[Importer] ✅ Done importing for {company_name}")
+    logger.info(f"Completed import for {company_name}")
 
 
 

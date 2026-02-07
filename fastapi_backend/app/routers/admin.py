@@ -15,6 +15,7 @@ Requirements: 14.1-14.9
 
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
+import logging
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -30,7 +31,7 @@ from ..models.audit_log import AuditLog
 from .admin_errors import ParsingError, ValidationError, DatabaseError
 from pymongo.errors import PyMongoError
 
-
+logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
@@ -172,9 +173,6 @@ async def preview_graphql_import(
     
     try:
         # Debug: Log input characteristics
-        input_length = len(body.raw)
-        input_start = body.raw[:100] if len(body.raw) > 100 else body.raw
-        print(f"[DEBUG] Preview import - Input length: {input_length}, Start: {input_start}")
         
         # Call preview_import
         preview_result = await importer.preview_import(
@@ -429,9 +427,6 @@ async def preview_company_graphql_import(
     
     try:
         # Debug: Log input characteristics
-        input_length = len(body.raw)
-        input_start = body.raw[:100] if len(body.raw) > 100 else body.raw
-        print(f"[DEBUG] Company preview import - Input length: {input_length}, Start: {input_start}")
         
         # Call preview_import with company context
         preview_result = await importer.preview_company_import(
@@ -686,6 +681,8 @@ async def refresh_company(
         
         company_name = company.get("name", "Unknown")
         
+        logger.info(f"Admin {admin_user.email} initiated refresh for company: {company_name} (ID: {company_id})")
+        
         # Track counts before refresh
         questions_before = await db["questions"].count_documents({"company_id": company_obj_id})
         
@@ -708,6 +705,8 @@ async def refresh_company(
             "inserted": inserted,
             "removed_marked": removed_count
         }
+        
+        logger.info(f"Company refresh completed for {company_name}: {counts}")
         
         # Log audit event
         audit_logger = AuditLoggerService(db)

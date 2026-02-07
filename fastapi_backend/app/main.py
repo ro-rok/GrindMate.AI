@@ -74,6 +74,31 @@ def create_app() -> FastAPI:
     app.include_router(analytics.router)  # Analytics routes
     app.include_router(timer.router)  # Timer routes
 
+    @app.get("/")
+    def root():
+        """
+        Root endpoint - API information and health check.
+        """
+        return {
+            "name": "LeetCode Tracker API",
+            "version": "1.0.0",
+            "status": "running",
+            "endpoints": {
+                "health": "/health",
+                "docs": "/docs",
+                "companies": "/companies.json",
+                "auth": {
+                    "login": "/users/sign_in",
+                    "register": "/users",
+                    "refresh": "/auth/refresh",
+                    "current_user": "/users/current"
+                },
+                "questions": "/companies/{company}/questions.json",
+                "analytics": "/analytics",
+                "admin": "/api/admin"
+            }
+        }
+    
     @app.get("/health")
     async def health(db: AsyncIOMotorDatabase = Depends(get_database)):
         # Simple check that we can talk to Mongo
@@ -146,11 +171,6 @@ def create_app() -> FastAPI:
             )
             solved_ids = {doc["question_id"] async for doc in cursor}
             
-            # Debug logging
-            logger.info(f"User {user_id} (ObjectId: {user_obj_id}) has {len(solved_ids)} solved questions")
-            if len(solved_ids) > 0:
-                logger.info(f"Sample solved question IDs: {[str(id) for id in list(solved_ids)[:5]]}")
-            
             return solved_ids
         
         # Helper function to build topic filters
@@ -182,38 +202,17 @@ def create_app() -> FastAPI:
                 query["$or"] = topic_filters
 
         solved_ids = await get_solved_ids(user_id)
-        
-        # Debug logging
-        import logging
-        logger = logging.getLogger("uvicorn")
-        logger.info(f"Querying questions for company {company_identifier} (ID: {company_obj_id}), user_id: {user_id}")
-        logger.info(f"Found {len(solved_ids)} solved questions for user {user_id}")
-        if len(solved_ids) > 0:
-            logger.info(f"Solved question ObjectIds: {[str(id) for id in list(solved_ids)[:10]]}")
 
         cursor = db["questions"].find(
             query,
             sort=[("frequency", 1), ("updated_at", 1)],
         )
         results: list[QuestionWithSolved] = []
-        solved_count = 0
         async for doc in cursor:
             # Check if solved before converting ObjectIds
             question_id = doc["_id"]
             is_solved = question_id in solved_ids
             
-            # Debug logging for first few questions and solved questions
-            if len(results) < 3 or is_solved:
-                logger.info(f"Question '{doc.get('title', 'Unknown')}' (ID: {question_id}) - Solved: {is_solved}")
-                if is_solved:
-                    logger.info(f"  ✓ This question IS in solved_ids set")
-                else:
-                    logger.info(f"  ✗ This question is NOT in solved_ids set (solved_ids contains {len(solved_ids)} items)")
-            
-            if is_solved:
-                solved_count += 1
-                # Log solved questions that match the filter
-                logger.debug(f"Solved question found: {doc.get('title')} (ID: {question_id}) matches company/timeframe filter")
             # Convert all ObjectId fields to strings for serialization
             # Create a new dict to avoid modifying the original
             clean_doc = {}
@@ -227,8 +226,6 @@ def create_app() -> FastAPI:
             q = QuestionWithSolved(**clean_doc, solved=is_solved)
             results.append(q)
         
-        # Debug logging
-        logger.info(f"Returning {len(results)} questions, {solved_count} marked as solved")
         return results
 
     return app

@@ -250,18 +250,16 @@ async def solve_question(
         upsert=True,
     )
     
-    # Verify the update was successful
-    logger = logging.getLogger("uvicorn")
-    logger.info(f"Marked question {question_obj_id} as solved for user {user_obj_id}. Matched: {result.matched_count}, Modified: {result.modified_count}, Upserted: {result.upserted_id}")
-    
     # Verify the record exists and is marked as solved
     verify_record = await db["user_questions"].find_one(
         {"user_id": user_obj_id, "question_id": question_obj_id}
     )
-    if verify_record:
-        logger.info(f"Verified: user_question record exists with solved={verify_record.get('solved')}")
+    if not verify_record:
+        logger = logging.getLogger("uvicorn")
+        logger.error(f"user_question record not found after update for user {user_id}, question {question_identifier}")
     else:
-        logger.error(f"ERROR: user_question record not found after update!")
+        logger = logging.getLogger("uvicorn")
+        logger.info(f"Question solved: {question_doc.get('title')} by user {user_id}")
     
     # Update streak
     streak_service = StreakService(db)

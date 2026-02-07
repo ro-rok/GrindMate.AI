@@ -1,4 +1,5 @@
 from datetime import timedelta
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -28,7 +29,7 @@ from ..services.security_question_service import (
     verify_security_answer,
 )
 
-
+logger = logging.getLogger("uvicorn")
 router = APIRouter(tags=["auth"])
 
 
@@ -163,6 +164,8 @@ async def register_user(
     doc["_id"] = result.inserted_id
     user_id = str(doc["_id"])
     
+    logger.info(f"New user registered: {email} (ID: {user_id})")
+    
     # Generate tokens
     access_token = create_access_token(user_id)
     refresh_token_str = create_refresh_token()
@@ -209,12 +212,14 @@ async def login_user(
     
     user = await get_user_by_email(db, email)
     if not user or not verify_password(password, user.encrypted_password):
+        logger.warning(f"Failed login attempt for email: {email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
         )
 
     user_id = str(user.id)
+    logger.info(f"User logged in: {email} (ID: {user_id})")
     
     # Generate tokens
     access_token = create_access_token(user_id)
@@ -256,12 +261,14 @@ async def refresh_token(
     refresh_token_doc, error = await validate_refresh_token(db, old_refresh_token)
     
     if error:
+        logger.warning(f"Token refresh failed: {error}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error
         )
     
     user_id = str(refresh_token_doc.user_id)
+    logger.debug(f"Token refreshed for user: {user_id}")
     
     # Rotate refresh token
     new_refresh_token, rotate_error = await rotate_refresh_token(db, old_refresh_token, user_id)

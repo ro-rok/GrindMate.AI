@@ -78,12 +78,6 @@ function Analytics() {
       const analyticsData = analyticsRes.data;
       const streakData = streakRes.data;
       
-      // Debug logging
-      console.log('Analytics data received:', analyticsData);
-      console.log('Streak data received:', streakData);
-      console.log('Solve stats:', analyticsData.solve_stats);
-      console.log('Analytics streak:', analyticsData.streak);
-      
       // Map streak data to match component expectations
       // Priority: analyticsData.streak (from /users/me/analytics) > streakData (from /users/me/streak)
       const mappedStreak = {
@@ -91,8 +85,6 @@ function Analytics() {
         longest_streak: analyticsData.streak?.longest ?? streakData?.longest_streak ?? 0,
         last_solve_date: analyticsData.streak?.last_solve_date ?? streakData?.last_solve_date ?? null,
       };
-      
-      console.log('Mapped streak:', mappedStreak);
       
       const transformedAnalytics = {
         streak: analyticsData.streak,
@@ -110,22 +102,11 @@ function Analytics() {
       };
       
       console.log('Transformed analytics:', transformedAnalytics);
-      console.log('Final streak values:', {
-        streak_current: streak?.current_streak,
-        streak_longest: streak?.longest_streak,
-        analytics_streak_current: analyticsData.streak?.current,
-        analytics_streak_longest: analyticsData.streak?.longest,
-      });
       
       setAnalytics(transformedAnalytics);
       setStreak(mappedStreak);
     } catch (err) {
       console.error('Failed to fetch analytics:', err);
-      console.error('Error details:', {
-        status: err.response?.status,
-        data: err.response?.data,
-        message: err.message,
-      });
       
       // If we get a 401, the session is invalid - update auth state
       if (err.response?.status === 401) {

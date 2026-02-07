@@ -435,6 +435,9 @@ class SmartRandomService:
         if not questions:
             return None
         
+        # Shuffle questions to avoid bias from database order (important when scores are tied)
+        random.shuffle(questions)
+        
         # Calculate priority scores for all questions
         scored_questions = []
         for question in questions:
@@ -453,6 +456,12 @@ class SmartRandomService:
         top_20_percent = max(1, len(scored_questions) // 5)
         top_questions = scored_questions[:top_20_percent]
         
+        # Debug logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Smart Random: Total questions={len(scored_questions)}, Top 20%={top_20_percent}")
+        logger.info(f"Top 5 scores: {[(q[0].get('title', 'N/A')[:30], q[0].get('difficulty'), q[1].total_score) for q in scored_questions[:5]]}")
+        
         # Weighted random selection (higher score = higher probability)
         # Use scores as weights (shift to positive if needed)
         min_score = min(score.total_score for _, score in top_questions)
@@ -468,6 +477,8 @@ class SmartRandomService:
             weights=weights,
             k=1
         )[0]
+        
+        logger.info(f"Selected: {selected_question.get('title', 'N/A')[:40]} ({selected_question.get('difficulty')}) - Score: {selected_score.total_score}")
         
         # Add priority_score and reason to question
         result = dict(selected_question)

@@ -415,6 +415,121 @@ async def random_question_json(
     return SmartRandomResponse(**selected_question)
 
 
+@router.get("/simple-random.json", response_model=SmartRandomResponse, status_code=status.HTTP_200_OK)
+async def simple_random_question_json(
+    company_identifier: str,
+    timeframe: Optional[str] = Query(default="30_days"),
+    update: Optional[str] = Query(default=None),
+    difficulty: Optional[str] = Query(default=None),
+    topics: Optional[str] = Query(default=None),
+    patterns: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
+    db: AsyncIOMotorDatabase = Depends(get_database),
+):
+    """
+    Simple random question selection without smart weighting.
+    
+    Returns a truly random unsolved question that matches the filters.
+    No difficulty bias based on performance - all difficulties equally likely.
+    """
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="user_id required for random selection"
+        )
+    
+    # Find company by identifier (ID, slug, or name)
+    company = await find_company_by_identifier(db, company_identifier)
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    
+    try:
+        company_obj_id = company["_id"]
+        user_obj_id = ObjectId(user_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid user_id"
+        )
+    
+    # Build filters
+    filters: dict = {"company_id": company_obj_id}
+    
+    if timeframe:
+        filters["timeframe"] = timeframe
+    
+    if update:
+        # format like 'Jan 25'
+        parts = update.split()
+        if len(parts) == 2:
+            month_name, year_suffix = parts
+            year_str = "20" + year_suffix
+            try:
+                from calendar import month_abbr
+                month_number = list(month_abbr).index(month_name.capitalize())
+                year = int(year_str)
+                if 2000 <= year <= 2099 and month_number > 0:
+                    start = date(year, month_number, 1)
+                    # crude end_of_month
+                    if month_number == 12:
+                        end = date(year + 1, 1, 1)
+                    else:
+                        end = date(year, month_number + 1, 1)
+                    start_dt = datetime.combine(start, datetime.min.time())
+                    end_dt = datetime.combine(end, datetime.min.time())
+                    filters["updated_at"] = {"$gte": start_dt, "$lt": end_dt}
+            except Exception:
+                pass
+    
+    if difficulty:
+        filters["difficulty"] = difficulty.upper()
+    
+    if topics:
+        topic_filters = _build_topic_filters(topics)
+        if topic_filters:
+            filters["$or"] = topic_filters
+    
+    if patterns:
+        # Filter by patterns (OR logic)
+        pattern_list = [p.strip() for p in patterns.split(",") if p.strip()]
+        if pattern_list:
+            filters["patterns"] = {"$in": pattern_list}
+    
+    # Get solved question IDs to exclude
+    solved_questions = await db["user_questions"].find({
+        "user_id": user_obj_id,
+        "solved": True
+    }).to_list(None)
+    solved_ids = [uq["question_id"] for uq in solved_questions]
+    
+    if solved_ids:
+        filters["_id"] = {"$nin": solved_ids}
+    
+    # Get all matching unsolved questions
+    questions = await db["questions"].find(filters).to_list(None)
+    
+    if not questions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No unsolved questions matching filters"
+        )
+    
+    # Select truly random question (uniform distribution)
+    selected_question = random.choice(questions)
+    
+    # Convert ObjectIds to strings for serialization
+    selected_question["id"] = str(selected_question["_id"])
+    selected_question.pop("_id", None)
+    if "company_id" in selected_question and selected_question["company_id"]:
+        selected_question["company_id"] = str(selected_question["company_id"])
+    
+    # Add metadata to indicate this was simple random
+    selected_question["priority_score"] = 0.0
+    selected_question["reason"] = "Simple random selection (no smart weighting)"
+    
+    return SmartRandomResponse(**selected_question)
+
+
 @router.post("/{question_id}/solve")
 async def solve_question(
     company_id: str,  # kept for route parity, not used directly

@@ -9,6 +9,7 @@ Provides endpoints for user analytics including:
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, UTC
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -17,7 +18,7 @@ from bson import ObjectId
 from ..auth import CurrentUser
 from ..db import get_database
 
-
+logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 

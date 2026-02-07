@@ -656,6 +656,7 @@ function FocusMode() {
         });
       }
     } catch (err) {
+      console.error('[FocusMode] Failed to mark as solved:', err);
       toast.error('Failed to mark as solved. Please try again.');
       // On error, refresh question data to ensure we have correct state
       await fetchQuestion(true);

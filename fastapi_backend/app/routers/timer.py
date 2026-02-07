@@ -10,6 +10,7 @@ Provides endpoints for question timer management:
 
 from typing import Optional
 from datetime import datetime, UTC
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -18,7 +19,7 @@ from bson import ObjectId
 from ..auth import CurrentUser
 from ..db import get_database
 
-
+logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/timer", tags=["timer"])
 
 

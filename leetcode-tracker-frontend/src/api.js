@@ -32,13 +32,10 @@ api.interceptors.request.use(
     if (protectedMethods.includes(config.method?.toUpperCase())) {
       // Get CSRF token from cookie (source of truth)
       const csrfToken = getCSRFToken();
-      console.log(`[CSRF Debug] Request ${config.method} ${config.url} - CSRF token: ${csrfToken ? 'present' : 'missing'}`);
       if (csrfToken) {
         config.headers['X-CSRF-Token'] = csrfToken;
-        console.log(`[CSRF Debug] Added X-CSRF-Token header: ${csrfToken.substring(0, 10)}...`);
-      } else {
-        console.warn(`[CSRF Debug] No CSRF token found for ${config.method} ${config.url}`);
-        console.warn(`[CSRF Debug] document.cookie = '${document.cookie}'`);
+      } else if (process.env.NODE_ENV === 'development') {
+        console.warn(`[API] No CSRF token found for ${config.method} ${config.url}`);
       }
     }
     return config;
@@ -56,21 +53,18 @@ api.interceptors.response.use(
       localStorage.setItem('currentUser', JSON.stringify(response.data));
       if (response.data.csrf_token) {
         localStorage.setItem('csrf_token', response.data.csrf_token);
-        console.log('[CSRF Debug] Stored CSRF token from login response');
       }
     }
     // If this is a register response, store CSRF token
     if (response.config.url.includes('/users.json') && response.status === 201) {
       if (response.data.csrf_token) {
         localStorage.setItem('csrf_token', response.data.csrf_token);
-        console.log('[CSRF Debug] Stored CSRF token from register response');
       }
     }
     // If this is a refresh response, store CSRF token if present
     if (response.config.url.includes('/auth/refresh') && response.status === 200) {
       if (response.data.csrf_token) {
         localStorage.setItem('csrf_token', response.data.csrf_token);
-        console.log('[CSRF Debug] Stored CSRF token from refresh response');
       }
     }
     return response;
@@ -98,10 +92,16 @@ api.interceptors.response.use(
         
         if (response.status === 200) {
           // Token refreshed successfully, retry the original request
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[API] Token refreshed successfully');
+          }
           return api(originalRequest);
         }
       } catch (refreshError) {
         // Refresh failed - clear auth state
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[API] Token refresh failed:', refreshError.response?.status, refreshError.response?.data);
+        }
         localStorage.removeItem('currentUser');
         localStorage.removeItem('csrf_token');
         
@@ -120,6 +120,9 @@ api.interceptors.response.use(
     
     // For other 401 errors or if refresh failed, clear auth state
     if (error.response?.status === 401) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[API] 401 Unauthorized:', error.config?.url);
+      }
       localStorage.removeItem('currentUser');
       localStorage.removeItem('csrf_token');
       

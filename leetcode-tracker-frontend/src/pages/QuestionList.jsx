@@ -323,19 +323,21 @@ function QuestionList() {
     }
   };
 
-  // Handle random question
+  // Handle random question - uses smart random algorithm
   const handleGetRandom = async () => {
     if (!companyId) return;
 
     try {
       const params = {
-        timeframe: filters.timeframe,
+        timeframe: filters.timeframe || '',
         difficulty: filters.difficulty || '',
         topics: filters.topics.join(','),
+        patterns: filters.patterns.join(','),
         user_id: user?.id || '',
         update: activeMonth || '',
       };
 
+      // Use smart random endpoint for intelligent question selection
       const response = await api.get(`/companies/${companyId}/questions/random.json`, { params });
       setRandomQuestion(response.data);
     } catch (err) {
