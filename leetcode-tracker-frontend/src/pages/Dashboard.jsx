@@ -7,6 +7,7 @@ import api from '../api';
 import useAuthStore from '../store/authStore';
 import useUIStore from '../store/uiStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { usePageTitle } from '../hooks/usePageTitle';
 import { getCompanyIdentifier } from '../utils/slugify';
 import StreakCard from '../components/dashboard/StreakCard';
 import WeakTopicsCard from '../components/dashboard/WeakTopicsCard';
@@ -30,9 +31,13 @@ function Dashboard() {
   const { user } = useAuthStore();
   const { showToast } = useUIStore();
   
+  // Set page title
+  usePageTitle('Dashboard');
+  
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
   const [streak, setStreak] = useState(null);
+  const [recentCompanies, setRecentCompanies] = useState([]);
   
   const heroRef = useRef(null);
   const cardsRef = useRef(null);
@@ -49,13 +54,15 @@ function Dashboard() {
         setLoading(true);
         
         // Fetch analytics and streak data
-        const [analyticsRes, streakRes] = await Promise.all([
+        const [analyticsRes, streakRes, recentCompaniesRes] = await Promise.all([
           api.get('/users/me/analytics'),
           api.get('/users/me/streak'),
+          api.get('/analytics/user/recent-solved-companies?limit=5'),
         ]);
         
         setAnalytics(analyticsRes.data);
         setStreak(streakRes.data);
+        setRecentCompanies(recentCompaniesRes.data);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
         
@@ -355,6 +362,60 @@ function Dashboard() {
             </Card>
           </div>
         </div>
+
+        {/* Recent Solved Companies */}
+        {recentCompanies && recentCompanies.length > 0 && (
+          <div className="dashboard-card mb-6">
+            <Card className="p-[var(--space-4)]">
+              <Card.Header className="p-0 pb-[var(--space-3)]">
+                <Card.Title className="text-base">Recent Solved Companies</Card.Title>
+              </Card.Header>
+              <div className="space-y-[var(--space-2)]">
+                {recentCompanies.map((company) => {
+                  const solvePercentage = company.total_questions > 0 
+                    ? Math.round((company.questions_solved / company.total_questions) * 100) 
+                    : 0;
+                  const companySlug = company.company_slug || company.company_id;
+                  
+                  return (
+                    <button
+                      key={company.company_id}
+                      onClick={() => navigate(`/companies/${companySlug}`)}
+                      className="w-full p-[var(--space-3)] bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-2)] border border-[var(--border-subtle)] hover:border-[var(--border-brand)] rounded-[var(--radius-md)] transition-all duration-[var(--duration-fast)] text-left group"
+                    >
+                      <div className="flex items-center justify-between mb-[var(--space-2)]">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--accent-primary)] transition-colors truncate">
+                            {company.company_name}
+                          </h4>
+                          <p className="text-xs text-[var(--text-tertiary)] mt-[var(--space-0_5)]">
+                            Last solved {new Date(company.last_solved_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right ml-[var(--space-3)]">
+                          <div className="text-sm font-semibold text-[var(--accent-primary)]">
+                            {company.questions_solved}/{company.total_questions}
+                          </div>
+                          <div className="text-xs text-[var(--text-tertiary)]">
+                            {solvePercentage}%
+                          </div>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-[var(--bg-surface-2)] rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full bg-[var(--accent-primary)] rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${solvePercentage}%` }}
+                          transition={{ duration: 0.8, delay: 0.2 }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Pattern distribution */}
         {analytics?.pattern_distribution && Object.keys(analytics.pattern_distribution).length > 0 && (

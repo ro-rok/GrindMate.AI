@@ -4,6 +4,7 @@ import toast from '../utils/toast';
 import useUIStore from '../store/uiStore';
 import useAuthStore from '../store/authStore';
 import { useQuestionTimer } from '../hooks/useQuestionTimer';
+import { usePageTitle } from '../hooks/usePageTitle';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -39,6 +40,9 @@ function FocusMode() {
   const companyId = location.state?.companyId || companyIdFromUrl;
 
   const [question, setQuestion] = useState(null);
+
+  // Set page title dynamically based on question title
+  usePageTitle(question ? `Focus: ${question.title}` : 'Focus Mode');
 
   // Use the question timer hook
   // Pass question?.solved to prevent auto-starting timer if question is already solved
@@ -87,6 +91,7 @@ function FocusMode() {
   const visibilityDebounceTimeoutRef = useRef(null);
   const markingSolvedRef = useRef(false); // Idempotency guard for mark solved
   const markingUnsolvedRef = useRef(false); // Idempotency guard for mark unsolved
+  const backendPingIntervalRef = useRef(null); // Backend ping interval for Focus Mode
   
   // Initialize session and start timer
   useEffect(() => {
@@ -151,8 +156,43 @@ function FocusMode() {
       closeFocusMode();
       persistSession();
       // Timer continues running even after unmount
+      
+      // Clear backend ping interval
+      if (backendPingIntervalRef.current) {
+        clearInterval(backendPingIntervalRef.current);
+        backendPingIntervalRef.current = null;
+      }
     };
   }, [questionId, location.key]);
+
+  // Backend ping in Focus Mode - ping every 14 minutes to keep backend alive
+  useEffect(() => {
+    // Clear any existing interval
+    if (backendPingIntervalRef.current) {
+      clearInterval(backendPingIntervalRef.current);
+    }
+    
+    // Start pinging backend every 14 minutes (840000ms)
+    backendPingIntervalRef.current = setInterval(async () => {
+      try {
+        await api.get('/health');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[FocusMode] Backend ping successful');
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[FocusMode] Backend ping failed:', error.message);
+        }
+      }
+    }, 14 * 60 * 1000); // 14 minutes
+    
+    return () => {
+      if (backendPingIntervalRef.current) {
+        clearInterval(backendPingIntervalRef.current);
+        backendPingIntervalRef.current = null;
+      }
+    };
+  }, []); // Empty deps - only set up once on mount
 
 
   // Auto-load code template when question content is fetched

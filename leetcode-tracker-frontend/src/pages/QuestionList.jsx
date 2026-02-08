@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import toast from '../utils/toast';
 import useQuestionStore from '../store/questionStore';
 import useAuthStore from '../store/authStore';
+import { usePageTitle } from '../hooks/usePageTitle';
 import QuestionFilters from '../components/question/QuestionFilters';
 import QuestionCard from '../components/question/QuestionCard';
 import QuestionRow from '../components/question/QuestionRow';
@@ -41,6 +42,10 @@ function QuestionList() {
   const { filters, setFilters } = useQuestionStore();
 
   const [company, setCompany] = useState(null);
+  
+  // Set page title dynamically based on company name
+  usePageTitle(company ? `${company.name} Questions` : 'Questions');
+  
   const [allQuestions, setAllQuestions] = useState([]);
   const [displayedQuestions, setDisplayedQuestions] = useState([]);
   const [updateMonths, setUpdateMonths] = useState([]);

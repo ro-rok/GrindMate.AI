@@ -23,6 +23,7 @@ function QuestionRow({
   onOpenLeetCode,
   className = '',
   layoutId,
+  maxFrequency = 100, // Maximum frequency in the dataset for percentage calculation
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const prefersReducedMotion = useReducedMotion();
@@ -32,6 +33,9 @@ function QuestionRow({
   const maxTopics = 3; // Show up to 3 topics on desktop
   const frequency = question.frequency || 0;
   const acceptanceRate = question.acceptance_rate ? Math.round(question.acceptance_rate * 100) : null;
+  
+  // Calculate frequency percentage based on max frequency in dataset
+  const frequencyPercentage = maxFrequency > 0 ? Math.min((frequency / maxFrequency) * 100, 100) : 0;
 
   const MotionRow = prefersReducedMotion ? 'div' : motion.div;
 
@@ -125,7 +129,8 @@ function QuestionRow({
             <div className="w-10 h-1.5 bg-[var(--bg-surface-2)] rounded-full overflow-hidden">
               <div 
                 className="h-full bg-[var(--accent-primary)] rounded-full transition-all"
-                style={{ width: `${Math.min((frequency / 100) * 100, 100)}%` }}
+                style={{ width: `${frequencyPercentage}%` }}
+                title={`Frequency: ${frequency} (${Math.round(frequencyPercentage)}% of max)`}
               />
             </div>
             <span className="text-[10px] text-[var(--text-tertiary)] font-medium">

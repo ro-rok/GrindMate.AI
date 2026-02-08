@@ -18,6 +18,11 @@ function QuestionListView({
   isLoading = false,
   itemHeight = 64, // Dense row height (for skeleton)
 }) {
+  // Calculate max frequency for percentage-based frequency bars
+  const maxFrequency = questions.length > 0 
+    ? Math.max(...questions.map(q => q.frequency || 0))
+    : 100;
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -54,6 +59,7 @@ function QuestionListView({
           onStar={onStar}
           onOpenLeetCode={onOpenLeetCode}
           layoutId={`question-${question.id}`}
+          maxFrequency={maxFrequency}
         />
       ))}
     </div>

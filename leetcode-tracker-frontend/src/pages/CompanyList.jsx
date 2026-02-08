@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import useAuthStore from '../store/authStore';
+import { usePageTitle } from '../hooks/usePageTitle';
 import { CompanyCard, CompanyRow, CompaniesSkeletonLoader, EmptyState } from '../components/company';
 import VirtualizedCompanyList from '../components/company/VirtualizedCompanyList';
 import Input from '../components/ui/Input';
@@ -33,6 +34,9 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
  * - Company prioritization
  */
 function CompanyList() {
+  // Set page title
+  usePageTitle('Companies');
+  
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

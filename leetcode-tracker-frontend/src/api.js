@@ -24,6 +24,48 @@ function getCSRFToken() {
   return csrfToken;
 }
 
+// Auto-refresh CSRF token every 10 minutes
+let csrfRefreshInterval = null;
+
+function startCSRFRefresh() {
+  // Clear any existing interval
+  if (csrfRefreshInterval) {
+    clearInterval(csrfRefreshInterval);
+  }
+  
+  // Refresh CSRF token every 10 minutes (600000ms)
+  csrfRefreshInterval = setInterval(async () => {
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/refresh`,
+        {},
+        {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
+      
+      if (response.status === 200 && response.data.csrf_token) {
+        localStorage.setItem('csrf_token', response.data.csrf_token);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[CSRF] Token refreshed automatically');
+        }
+      }
+    } catch (error) {
+      // Silently fail - the next API call will trigger a refresh if needed
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[CSRF] Auto-refresh failed:', error.message);
+      }
+    }
+  }, 10 * 60 * 1000); // 10 minutes
+}
+
+// Start CSRF refresh when module loads
+startCSRFRefresh();
+
 // Add request interceptor to include CSRF token
 api.interceptors.request.use(
   config => {

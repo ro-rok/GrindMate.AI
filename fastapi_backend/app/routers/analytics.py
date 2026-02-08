@@ -72,6 +72,16 @@ class AdminDashboardStats(BaseModel):
     top_users: List[Dict[str, Any]]
 
 
+class RecentSolvedCompany(BaseModel):
+    """Response model for recent solved company"""
+    company_id: str
+    company_name: str
+    company_slug: Optional[str] = None
+    questions_solved: int
+    last_solved_at: datetime
+    total_questions: int
+
+
 def format_time(seconds: int) -> str:
     """Format seconds into human-readable time"""
     if seconds < 60:
@@ -444,3 +454,87 @@ async def update_time_spent(
         "time_spent_seconds": time_spent_seconds,
         "time_formatted": format_time(time_spent_seconds)
     }
+
+
+@router.get(
+    "/user/recent-solved-companies",
+    response_model=List[RecentSolvedCompany],
+    status_code=status.HTTP_200_OK
+)
+async def get_recent_solved_companies(
+    current_user: CurrentUser,
+    limit: int = Query(default=5, ge=1, le=20),
+    db: AsyncIOMotorDatabase = Depends(get_database)
+):
+    """
+    Get recently solved companies for the current user.
+    
+    Returns a list of companies where the user has solved questions,
+    ordered by most recent solve date.
+    
+    Args:
+        limit: Maximum number of companies to return (default: 5, max: 20)
+    
+    Returns:
+        List of companies with solve statistics
+    """
+    user_id = ObjectId(current_user.id)
+    
+    # Aggregate recent solved questions by company
+    pipeline = [
+        # Match solved questions for this user
+        {
+            "$match": {
+                "user_id": user_id,
+                "solved": True
+            }
+        },
+        # Sort by most recent solve
+        {"$sort": {"solved_at": -1}},
+        # Lookup question details to get company_id
+        {
+            "$lookup": {
+                "from": "questions",
+                "localField": "question_id",
+                "foreignField": "_id",
+                "as": "question"
+            }
+        },
+        # Unwind question array
+        {"$unwind": "$question"},
+        # Group by company
+        {
+            "$group": {
+                "_id": "$question.company_id",
+                "questions_solved": {"$sum": 1},
+                "last_solved_at": {"$max": "$solved_at"}
+            }
+        },
+        # Sort by most recent solve
+        {"$sort": {"last_solved_at": -1}},
+        # Limit results
+        {"$limit": limit}
+    ]
+    
+    company_stats = await db["user_questions"].aggregate(pipeline).to_list(length=limit)
+    
+    # Enrich with company details
+    result = []
+    for stat in company_stats:
+        company = await db["companies"].find_one({"_id": stat["_id"]})
+        if company:
+            # Get total questions for this company
+            total_questions = await db["questions"].count_documents({
+                "company_id": stat["_id"]
+            })
+            
+            result.append(RecentSolvedCompany(
+                company_id=str(stat["_id"]),
+                company_name=company.get("name", "Unknown"),
+                company_slug=company.get("slug"),
+                questions_solved=stat["questions_solved"],
+                last_solved_at=stat["last_solved_at"],
+                total_questions=total_questions
+            ))
+    
+    return result
