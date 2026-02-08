@@ -281,11 +281,37 @@ function Dashboard() {
               </Card.Header>
               <nav aria-label="Quick actions">
                 <div className="space-y-[var(--space-2)]">
+                  {/* Smart Random Question */}
                   <SmartRandomButton
                     variant="primary"
                     className="w-full text-sm"
                     showToggle={true}
                   />
+                  
+                  {/* Continue Last Company */}
+                  {recentCompanies && recentCompanies.length > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        const lastCompany = recentCompanies[0];
+                        const companySlug = lastCompany.company_slug || lastCompany.company_id;
+                        navigate(`/companies/${companySlug}`);
+                      }}
+                      aria-label="Continue practicing with your last company"
+                    >
+                      <span className="mr-[var(--space-2)]">🔄</span>
+                      <div className="flex-1 text-left">
+                        <div className="text-sm font-medium">Continue Last Company</div>
+                        <div className="text-xs text-[var(--text-tertiary)] truncate">
+                          {recentCompanies[0].company_name}
+                        </div>
+                      </div>
+                    </Button>
+                  )}
+                  
+                  {/* Browse All Companies */}
                   <Button
                     variant="secondary"
                     size="sm"
@@ -296,6 +322,30 @@ function Dashboard() {
                     <span className="mr-[var(--space-2)]">📚</span>
                     Browse Companies
                     <span className="ml-auto text-xs text-[var(--text-tertiary)]">Ctrl+K</span>
+                  </Button>
+                  
+                  {/* View Analytics */}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => navigate('/analytics')}
+                    aria-label="View detailed analytics and progress"
+                  >
+                    <span className="mr-[var(--space-2)]">📊</span>
+                    View Analytics
+                  </Button>
+                  
+                  {/* Profile Settings */}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => navigate('/profile')}
+                    aria-label="Manage your profile and settings"
+                  >
+                    <span className="mr-[var(--space-2)]">⚙️</span>
+                    Profile Settings
                   </Button>
                 </div>
               </nav>

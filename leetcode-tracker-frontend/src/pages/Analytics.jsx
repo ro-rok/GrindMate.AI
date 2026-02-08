@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import api from '../api';
 import useAuthStore from '../store/authStore';
+import { usePageTitle } from '../hooks/usePageTitle';
 import Button from '../components/ui/Button';
 import StreakCard from '../components/dashboard/StreakCard';
 import StatsCard from '../components/dashboard/StatsCard';
@@ -26,6 +27,9 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
  * 
  **/
 function Analytics() {
+  // Set page title
+  usePageTitle('Analytics');
+  
   const [analytics, setAnalytics] = useState(null);
   const [streak, setStreak] = useState(null);
   const [loading, setLoading] = useState(true);

@@ -14,6 +14,7 @@ const CompanyList = lazy(() => import('../pages/CompanyList'));
 const QuestionList = lazy(() => import('../pages/QuestionList'));
 const FocusMode = lazy(() => import('../pages/FocusMode'));
 const Profile = lazy(() => import('../pages/Profile'));
+const Analytics = lazy(() => import('../pages/Analytics'));
 const AdminPortal = lazy(() => import('../pages/AdminPortal'));
 const AdminDashboard = lazy(() => import('../pages/AdminDashboard'));
 const NotFound = lazy(() => import('../pages/NotFound'));
@@ -133,6 +134,16 @@ const router = createBrowserRouter([
           <SuspenseLayout>
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          </SuspenseLayout>
+        ),
+      },
+      {
+        path: '/analytics',
+        element: (
+          <SuspenseLayout>
+            <ProtectedRoute>
+              <Analytics />
             </ProtectedRoute>
           </SuspenseLayout>
         ),
